@@ -8,6 +8,10 @@ interface Task {
 	completed: boolean;
 	dueDate?: string; // YYYY-MM-DD
 	scratchpad?: string;
+	recurrenceType?: 'none' | 'daily' | 'weekly' | 'monthly' | 'custom_days';
+	recurrenceValue?: number;
+	recurrenceUntil?: string; // YYYY-MM-DD
+	recurrenceExdates?: string[]; // Array of YYYY-MM-DD dates to exclude
 }
 
 interface Category {
@@ -25,6 +29,7 @@ interface SimpleTasksBlocksSettings {
 	dateFormat: 'YYYY-MM-DD' | 'DD-MM-YYYY' | 'Automatic';
 	sharedFilePath?: string;
 	activeContext: 'local' | 'shared';
+	futureTasksCount: number;
 }
 
 const DEFAULT_SETTINGS: SimpleTasksBlocksSettings = {
@@ -32,7 +37,8 @@ const DEFAULT_SETTINGS: SimpleTasksBlocksSettings = {
 	confirmTaskDeletion: false,
 	dateFormat: 'Automatic',
 	sharedFilePath: '',
-	activeContext: 'local'
+	activeContext: 'local',
+	futureTasksCount: 5
 }
 
 const VIEW_TYPE_TASKS = "simple-tasks-blocks-view";
@@ -615,6 +621,21 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 					this.plugin.settings.dateFormat = value as SimpleTasksBlocksSettings['dateFormat'];
 					await this.plugin.saveSettings();
 				}));
+
+		new Setting(containerEl)
+			.setName('Number of future tasks to display')
+			.setDesc('Choose how many future occurrences to show for recurring tasks.')
+			.addDropdown(dropdown => {
+				for (let i = 1; i <= 10; i++) {
+					dropdown.addOption(i.toString(), i.toString());
+				}
+				dropdown
+					.setValue(this.plugin.settings.futureTasksCount.toString())
+					.onChange(async (value) => {
+						this.plugin.settings.futureTasksCount = parseInt(value);
+						await this.plugin.saveSettings();
+					});
+			});
 	}
 }
 
@@ -1032,7 +1053,6 @@ class TasksView extends ItemView {
 
 renderTask(container: HTMLElement, category: Category, task: Task) {
         const taskRow = container.createEl('div', { cls: 'stb-task-row' });
-        taskRow.style.position = 'relative';
 
         // ============================================================
         // 1. TOUT À GAUCHE : LE SCRATCHPAD (NOUVEL EMPLACEMENT)
@@ -1075,6 +1095,42 @@ renderTask(container: HTMLElement, category: Category, task: Task) {
 
         // Badge de date
         if (task.dueDate) {
+            // Recurrence Icon (Portal)
+            if (task.recurrenceType && task.recurrenceType !== 'none') {
+                const recurIcon = rightActions.createEl('div', { cls: 'stb-recurrence-icon clickable-icon' });
+                setIcon(recurIcon, 'calendar-cog');
+                
+                // Style adjustments
+                recurIcon.style.color = 'var(--text-accent)';
+                recurIcon.style.marginRight = '4px';
+                recurIcon.style.display = 'inline-flex';
+                recurIcon.style.alignItems = 'center';
+
+                recurIcon.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    new FutureOccurrencesModal(this.app, task, this.plugin.settings.futureTasksCount, async (updatedTask) => {
+                        // Merge updates (recurrenceExdates or full clear)
+                        Object.assign(task, updatedTask);
+                        
+                        // For Shared mode: we must fetch fresh categories and update the specific task within that structure
+                        const categories = this.plugin.getCategories();
+                        const currentCat = categories.find(c => c.id === category.id);
+                        if (currentCat) {
+                            const currentTask = currentCat.tasks.find(t => t.id === task.id);
+                            if (currentTask) {
+                                // Apply updates to the fresh task object
+                                Object.assign(currentTask, updatedTask);
+                                await this.plugin.saveCategories(categories);
+                            }
+                        } else {
+                            // Fallback for local or if category not found (should be rare)
+                            await this.plugin.saveCategories(categories); 
+                        }
+                        this.refresh();
+                    }).open();
+                });
+            }
+
             const formattedDate = this.formatDate(task.dueDate);
             const dateBadge = rightActions.createEl('span', { cls: 'stb-date-badge', text: formattedDate });
             
@@ -1106,21 +1162,7 @@ renderTask(container: HTMLElement, category: Category, task: Task) {
             }
         });
 
-        // 5. INPUT CACHÉ (Pour le calendrier)
-        const dateEditInput = taskRow.createEl('input', { type: 'date', cls: 'stb-hidden-date-input' });
-        if (task.dueDate) dateEditInput.value = task.dueDate;
 
-        // On réutilise l'astuce du survol pour éviter le bug du haut à gauche
-        const updateInputPosition = () => {
-            const btnRect = dateEditBtn.getBoundingClientRect();
-            const rowRect = taskRow.getBoundingClientRect();
-            if (btnRect.width > 0) {
-                dateEditInput.style.top = `${btnRect.bottom - rowRect.top + 4}px`;
-                dateEditInput.style.left = `${btnRect.left - rowRect.left}px`;
-            }
-        };
-
-        taskRow.addEventListener('mouseenter', updateInputPosition);
         
         // Context Menu for Duplicate
         taskRow.addEventListener('contextmenu', (event: MouseEvent) => {
@@ -1140,21 +1182,29 @@ renderTask(container: HTMLElement, category: Category, task: Task) {
 
         dateEditBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            updateInputPosition();
-            if ('showPicker' in HTMLInputElement.prototype) {
-                try { (dateEditInput as any).showPicker(); } 
-                catch { dateEditInput.focus(); }
-            } else {
-                dateEditInput.focus();
-            }
+            new TaskDateModal(this.app, task, async (updatedData) => {
+                Object.assign(task, updatedData);
+                
+                // Re-fetching categories to be safe and ensuring we save the updated state
+                const categories = this.plugin.getCategories();
+                const currentCat = categories.find(c => c.id === category.id);
+                if (currentCat) {
+                    const currentTask = currentCat.tasks.find(t => t.id === task.id);
+                    if (currentTask) {
+                        currentTask.dueDate = task.dueDate;
+                        currentTask.recurrenceType = task.recurrenceType;
+                        currentTask.recurrenceValue = task.recurrenceValue;
+                        currentTask.recurrenceUntil = task.recurrenceUntil;
+                        currentTask.recurrenceExdates = task.recurrenceExdates;
+                        await this.plugin.saveCategories(categories);
+                    }
+                }
+                
+                this.refresh();
+            }).open();
         });
 
-        dateEditInput.addEventListener('change', async () => {
-            if (dateEditInput.value !== task.dueDate) {
-                await this.plugin.updateTaskDate(category.id, task.id, dateEditInput.value);
-                this.refresh();
-            }
-        });
+        // 6. FUTURE OCCURRENCES logic removed from blocks view as requested
     }
 
 	// Fonction utilitaire pour l'édition de texte en ligne
@@ -1258,8 +1308,71 @@ renderTask(container: HTMLElement, category: Category, task: Task) {
 		if (category) {
 			const task = category.tasks.find(t => t.id === taskId);
 			if (task) {
-				task.completed = completed;
+				// Recurrence Logic
+				if (completed && task.recurrenceType && task.recurrenceType !== 'none') {
+					// Calculate next date
+					let nextDate = window.moment(task.dueDate || undefined);
+					if (!task.dueDate) nextDate = window.moment(); // Default to today if no date
+
+					const value = task.recurrenceValue || 1;
+
+					switch (task.recurrenceType) {
+						case 'daily':
+							nextDate.add(1, 'days');
+							break;
+						case 'weekly':
+							nextDate.add(1, 'weeks');
+							break;
+						case 'monthly':
+							nextDate.add(1, 'months');
+							break;
+						case 'custom_days':
+							nextDate.add(value, 'days');
+							break;
+					}
+
+					// Update task: Check if we passed the UNTIL date
+					const nextDateStr = nextDate.format('YYYY-MM-DD');
+					
+					// EXDATE Check Loop
+					// If next date is in EXDATE, keep adding until we find a valid date or pass UNTIL
+					let loopGuard = 0;
+					while (task.recurrenceExdates && task.recurrenceExdates.includes(nextDate.format('YYYY-MM-DD')) && loopGuard < 100) {
+						switch (task.recurrenceType) {
+							case 'daily': nextDate.add(1, 'days'); break;
+							case 'weekly': nextDate.add(1, 'weeks'); break;
+							case 'monthly': nextDate.add(1, 'months'); break;
+							case 'custom_days': nextDate.add(value, 'days'); break;
+						}
+						loopGuard++;
+					}
+					
+					const finalNextDateStr = nextDate.format('YYYY-MM-DD');
+					let shouldRecur = true;
+
+					if (task.recurrenceUntil) {
+						if (nextDate.isAfter(moment(task.recurrenceUntil))) {
+							shouldRecur = false;
+						}
+					}
+
+					if (shouldRecur) {
+						task.completed = false;
+						task.dueDate = finalNextDateStr;
+						new Notice(`Next occurrence: ${task.dueDate}`);
+					} else {
+						// Task is completed and recurrence ends
+						task.completed = true;
+						new Notice("Recurring task ended (Until date reached).");
+					}
+				} else {
+					// Standard toggle
+					task.completed = completed;
+				}
+				
 				await this.plugin.saveCategories(categories);
+				// If we changed the date or kept it uncompleted, the UI needs to reflect that state
+				// This is handled by refresh in the view calling this or automatic if triggered via view
 			}
 		}
 	}
@@ -1336,6 +1449,344 @@ class AddCategoryModal extends Modal {
 			this.onSubmit(name, task, date || undefined);
 			this.close();
 		});
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
+	}
+}
+
+class FutureOccurrencesModal extends Modal {
+	task: Task;
+	count: number;
+	onSave: (updatedTask: Partial<Task>) => void;
+
+	constructor(app: App, task: Task, count: number, onSave: (updatedTask: Partial<Task>) => void) {
+		super(app);
+		this.task = task;
+		this.count = 15; // Force limit to 15 as requested
+		this.onSave = onSave;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h2", { text: "Future Occurrences" });
+		
+		const listContainer = contentEl.createDiv({ cls: 'stb-future-list' });
+		
+		let nextDate = window.moment(this.task.dueDate || undefined);
+		if (!this.task.dueDate) nextDate = window.moment();
+		
+		const value = this.task.recurrenceValue || 1;
+		const exdates = this.task.recurrenceExdates || [];
+		
+		// Generate candidates
+		let found = 0;
+		let safety = 0;
+		const maxDisplay = 15;
+		
+		while (found < maxDisplay && safety < 1000) {
+			// Calculate next date
+			switch (this.task.recurrenceType) {
+				case 'daily': nextDate.add(1, 'days'); break;
+				case 'weekly': nextDate.add(1, 'weeks'); break;
+				case 'monthly': nextDate.add(1, 'months'); break;
+				case 'custom_days': nextDate.add(value, 'days'); break;
+			}
+			
+			const dateStr = nextDate.format('YYYY-MM-DD');
+			
+			// Check Until
+			if (this.task.recurrenceUntil && nextDate.isAfter(moment(this.task.recurrenceUntil))) {
+				break;
+			}
+			
+			// Check Exdate
+			if (exdates.includes(dateStr)) {
+				safety++;
+				continue;
+			}
+			
+			found++;
+			safety++;
+			
+			// Render Row
+			const row = listContainer.createDiv({ cls: 'stb-future-item' });
+			row.style.display = 'flex';
+			row.style.justifyContent = 'space-between';
+			row.style.alignItems = 'center';
+			row.style.padding = '8px 0';
+			row.style.borderBottom = '1px solid var(--background-modifier-border)';
+			
+			const dateText = nextDate.format('dddd LL');
+			const capitalizedDateText = dateText.charAt(0).toUpperCase() + dateText.slice(1);
+			row.createSpan({ text: capitalizedDateText }); // Localized long date with capitalized day
+			
+			const deleteBtn = row.createDiv({ cls: 'clickable-icon' });
+			setIcon(deleteBtn, 'trash');
+			deleteBtn.setAttribute('aria-label', 'Skip this occurrence');
+			deleteBtn.addEventListener('click', () => {
+				new ConfirmModal(this.app, `Skip the occurrence on ${dateStr}?`, () => {
+					// Add to EXDATE
+					const newExdates = [...(this.task.recurrenceExdates || []), dateStr];
+					this.onSave({ recurrenceExdates: newExdates });
+					new Notice("Occurrence skipped.");
+					this.close();
+				}).open();
+			});
+		}
+		
+		if (found === 0) {
+			listContainer.createDiv({ text: "No future occurrences found." });
+		}
+
+		// --- Footer Logic ---
+		const footer = contentEl.createDiv({ cls: 'stb-future-footer' });
+		footer.style.marginTop = '15px';
+		footer.style.fontStyle = 'italic';
+		footer.style.color = 'var(--text-muted)';
+		footer.style.marginBottom = '20px';
+
+		// Check if there are MORE items
+		if (found === maxDisplay) {
+			if (this.task.recurrenceUntil) {
+				// CASE A: Count remaining until end date
+				let remaining = 0;
+				let countSafety = 0;
+				const countDate = nextDate.clone(); // Continue from last checked date
+
+				while (countSafety < 5000) { // Safety limit for loop
+					switch (this.task.recurrenceType) {
+						case 'daily': countDate.add(1, 'days'); break;
+						case 'weekly': countDate.add(1, 'weeks'); break;
+						case 'monthly': countDate.add(1, 'months'); break;
+						case 'custom_days': countDate.add(value, 'days'); break;
+					}
+
+					if (countDate.isAfter(moment(this.task.recurrenceUntil))) {
+						break;
+					}
+
+					if (!exdates.includes(countDate.format('YYYY-MM-DD'))) {
+						remaining++;
+					}
+					countSafety++;
+				}
+
+				if (remaining > 0) {
+					footer.setText(`And ${remaining} more occurrences until ${this.task.recurrenceUntil}`);
+				}
+
+			} else {
+				// CASE B: Infinite
+				let typeText = 'days';
+				let displayValue = 1;
+
+				switch(this.task.recurrenceType) {
+					case 'daily': 
+						typeText = 'days'; 
+						break;
+					case 'weekly': 
+						typeText = 'weeks'; 
+						break;
+					case 'monthly': 
+						typeText = 'months'; 
+						break;
+					case 'custom_days': 
+						typeText = 'days'; 
+						displayValue = value;
+						break;
+				}
+				
+				footer.setText(`Task repeated every ${displayValue} ${typeText} without end date`);
+			}
+		}
+
+		// --- Stop Recurrence Button ---
+		const stopBtnContainer = contentEl.createDiv({ cls: 'stb-stop-recurrence-container' });
+		stopBtnContainer.style.display = 'flex';
+		stopBtnContainer.style.justifyContent = 'center';
+		stopBtnContainer.style.marginTop = '10px';
+
+		const stopBtn = stopBtnContainer.createEl('button', { text: "Stop Recurrence / Delete all future dates", cls: "mod-warning" });
+		stopBtn.style.width = '100%';
+
+		stopBtn.addEventListener('click', () => {
+			new ConfirmModal(this.app, "Are you sure you want to stop this recurrence? This will delete all future scheduled dates for this task.", () => {
+				this.onSave({
+					recurrenceType: 'none',
+					recurrenceValue: undefined,
+					recurrenceUntil: undefined,
+					recurrenceExdates: []
+				});
+				new Notice("Recurrence stopped. Future dates deleted.");
+				this.close();
+			}).open();
+		});
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
+	}
+}
+
+class TaskDateModal extends Modal {
+	task: Task;
+	onSave: (updatedData: Partial<Task>) => void;
+	tempDate: string;
+	tempRecurType: 'none' | 'daily' | 'weekly' | 'monthly' | 'custom_days';
+	tempRecurValue: number;
+	tempRecurUntil: string;
+	tempUntilMode: 'never' | 'until';
+
+	constructor(app: App, task: Task, onSave: (updatedData: Partial<Task>) => void) {
+		super(app);
+		this.task = task;
+		this.onSave = onSave;
+		this.tempDate = task.dueDate || '';
+		this.tempRecurType = task.recurrenceType || 'none';
+		this.tempRecurValue = task.recurrenceValue || 1;
+		this.tempRecurUntil = task.recurrenceUntil || '';
+		this.tempUntilMode = this.tempRecurUntil ? 'until' : 'never';
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h2", { text: "Éditer la date et récurrence" });
+
+		// Date Picker
+		new Setting(contentEl)
+			.setName("Date d'échéance")
+			.addText(text => text
+				.setValue(this.tempDate)
+				.setPlaceholder('YYYY-MM-DD')
+				.onChange(value => {
+					this.tempDate = value;
+				})
+				.inputEl.type = 'date' // Native date picker
+			);
+
+		// Recurrence Type
+		new Setting(contentEl)
+			.setName("Récurrence")
+			.addDropdown(dropdown => dropdown
+				.addOption('none', 'Aucune')
+				.addOption('daily', 'Tous les jours')
+				.addOption('weekly', 'Toutes les semaines')
+				.addOption('monthly', 'Tous les mois')
+				.addOption('custom_days', 'Personnalisé (Jours)')
+				.setValue(this.tempRecurType)
+				.onChange(value => {
+					this.tempRecurType = value as any;
+					this.displayCustomValueField(valueField, value);
+				})
+			);
+
+		// Custom Value Field (Hidden by default)
+		const valueField = new Setting(contentEl)
+			.setName("Intervalle (jours)")
+			.addText(text => text
+				.setValue(this.tempRecurValue.toString())
+				.onChange(value => {
+					const num = parseInt(value);
+					if (!isNaN(num) && num > 0) {
+						this.tempRecurValue = num;
+					}
+				})
+				.inputEl.type = 'number'
+			);
+
+		// Initialize visibility for custom value
+		this.displayCustomValueField(valueField, this.tempRecurType);
+
+		// End of Recurrence
+		contentEl.createEl("h3", { text: "Fin de la récurrence", cls: "stb-modal-h3" });
+		
+		const untilSetting = new Setting(contentEl)
+			.setName("Arrêter la répétition")
+			.addDropdown(dropdown => dropdown
+				.addOption('never', 'Jamais')
+				.addOption('until', 'Jusqu\'au...')
+				.setValue(this.tempUntilMode)
+				.onChange(value => {
+					this.tempUntilMode = value as 'never' | 'until';
+					this.displayUntilField(untilDateField, value);
+				})
+			);
+
+		const untilDateField = new Setting(contentEl)
+			.setName("Date de fin")
+			.addText(text => text
+				.setValue(this.tempRecurUntil)
+				.setPlaceholder('YYYY-MM-DD')
+				.onChange(value => {
+					this.tempRecurUntil = value;
+				})
+				.inputEl.type = 'date'
+			);
+		
+		this.displayUntilField(untilDateField, this.tempUntilMode);
+
+
+		// Save Button
+		const buttonDiv = contentEl.createDiv({ cls: 'stb-modal-actions' });
+		buttonDiv.style.marginTop = '20px';
+		
+		const saveBtn = new Setting(buttonDiv)
+			.addButton(btn => btn
+				.setButtonText("Enregistrer")
+				.setCta()
+				.onClick(() => {
+					// Validation: End date requires Start date and Recurrence Type
+					if (this.tempUntilMode === 'until') {
+						if (!this.tempDate) {
+							new Notice("Erreur : Une date d'échéance (début) est requise pour définir une fin de récurrence.");
+							return;
+						}
+						if (this.tempRecurType === 'none') {
+							new Notice("Erreur : Veuillez choisir une fréquence de récurrence.");
+							return;
+						}
+						if (!this.tempRecurUntil) {
+							new Notice("Erreur : Veuillez sélectionner une date de fin valide.");
+							return;
+						}
+					}
+
+					// Clean up until date if mode is never
+					const finalUntil = this.tempUntilMode === 'until' ? this.tempRecurUntil : undefined;
+
+					this.onSave({
+						dueDate: this.tempDate,
+						recurrenceType: this.tempRecurType,
+						recurrenceValue: this.tempRecurValue,
+						recurrenceUntil: finalUntil
+					});
+					this.close();
+				})
+			);
+			
+		// Style hack to make button full width if desired, or just standard
+		saveBtn.settingEl.style.border = 'none';
+		saveBtn.settingEl.style.justifyContent = 'flex-end';
+	}
+
+	displayCustomValueField(setting: Setting, type: string) {
+		if (type === 'custom_days') {
+			setting.settingEl.show();
+		} else {
+			setting.settingEl.hide();
+		}
+	}
+
+	displayUntilField(setting: Setting, mode: string) {
+		if (mode === 'until') {
+			setting.settingEl.show();
+		} else {
+			setting.settingEl.hide();
+		}
 	}
 
 	onClose() {
