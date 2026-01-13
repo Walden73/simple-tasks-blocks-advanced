@@ -10,8 +10,8 @@ interface Task {
 	scratchpad?: string;
 	recurrenceType?: 'none' | 'daily' | 'weekly' | 'monthly' | 'custom_days';
 	recurrenceValue?: number;
-	recurrenceUntil?: string; // YYYY-MM-DD
-	recurrenceExdates?: string[]; // Array of YYYY-MM-DD dates to exclude
+	recurrenceUntil?: string;
+	recurrenceExdates?: string[];
 }
 
 interface Category {
@@ -66,12 +66,10 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 			(leaf) => new TasksView(leaf, this)
 		);
 
-		// Add Ribbon Icon
 		this.addRibbonIcon('list-checks', 'Simple tasks blocks', () => {
 			void this.activateView();
 		});
 
-		// Add Command
 		this.addCommand({
 			id: 'create-new-task-category',
 			name: 'Create new task category',
@@ -82,10 +80,7 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 			}
 		});
 
-		// Add Settings Tab
 		this.addSettingTab(new SimpleTasksBlocksSettingTab(this.app, this));
-
-		// Setup Watcher
 		this.setupSharedFileWatcher();
 	}
 
@@ -94,26 +89,23 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 			try {
 				const fs = require('fs');
 				if (fs.existsSync(this.settings.sharedFilePath)) {
-					// Use fs.watch (more efficient than watchFile polling) but careful with duplicates
 					let fsWait: NodeJS.Timeout | null = null;
-					
+
 					fs.watch(this.settings.sharedFilePath, (eventType: string, filename: string) => {
 						if (filename && eventType === 'change') {
 							if (fsWait) return;
-							
+
 							fsWait = setTimeout(() => {
 								fsWait = null;
 								if (this.settings.activeContext === 'shared') {
-									// Trigger animation before refresh
 									const reloadBtn = document.querySelector('.stb-sync-icon');
 									if (reloadBtn) {
 										reloadBtn.addClass('is-spinning');
 										setTimeout(() => reloadBtn.removeClass('is-spinning'), 800);
 									}
-									
-									this.refreshViews(true); // true = indicate sync
+									this.refreshViews(true);
 								}
-							}, 100); // Debounce 100ms
+							}, 100);
 						}
 					});
 				}
@@ -140,7 +132,7 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-		this.setupSharedFileWatcher(); // Re-setup watcher if path changed
+		this.setupSharedFileWatcher();
 		this.refreshViews();
 	}
 
@@ -157,7 +149,7 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 
 	getCategories(isShared?: boolean): Category[] {
 		const useShared = isShared !== undefined ? isShared : (this.settings.activeContext === 'shared');
-		
+
 		if (useShared && this.settings.sharedFilePath) {
 			try {
 				const fs = require('fs');
@@ -181,9 +173,7 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 		if (useShared && this.settings.sharedFilePath) {
 			try {
 				const fs = require('fs');
-				
-				// Read-Merge-Write Logic
-				// 1. Read fresh data from disk
+
 				let freshCategories: Category[] = [];
 				if (fs.existsSync(this.settings.sharedFilePath)) {
 					try {
@@ -194,48 +184,34 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 						console.error("Error reading fresh data for merge:", readError);
 					}
 				}
-				
+
 				const mergedCategories = [...freshCategories];
-				
+
 				categories.forEach(localCat => {
 					const diskCatIndex = mergedCategories.findIndex(dc => dc.id === localCat.id);
 					if (diskCatIndex !== -1) {
-						// Update existing category
 						const diskCat = mergedCategories[diskCatIndex];
-						
-						// Merge props
 						diskCat.name = localCat.name;
 						diskCat.color = localCat.color;
 						diskCat.isCollapsed = localCat.isCollapsed;
 						diskCat.lastSortOrder = localCat.lastSortOrder;
-						
-						// Merge tasks logic restored to previous working state but careful with deletes
-						// If we want generic save to work, we need to know what changed.
-						// Since we are reverting to "Direct Delete" inside deleteTask, 
-						// this generic save can stay "smart" for ADDITIONS/UPDATES but might fail deletions if not careful.
-						// However, the prompt specifically asked to handle delete logic inside deleteTask.
-						// So I will simplify this merge to be robust for general updates, 
-						// and let deleteTask handle its own persistence if needed, OR
-						// I will fix deleteTask to NOT use this method if isShared is true.
-						
-						// Let's implement the smart union again which is good for updates/additions
+
 						const localTasksMap = new Map(localCat.tasks.map(t => [t.id, t]));
 						const diskTasks = diskCat.tasks;
-						
+
 						const mergedTasks = diskTasks.map(dt => {
 							if (localTasksMap.has(dt.id)) {
-								return localTasksMap.get(dt.id)!; 
+								return localTasksMap.get(dt.id)!;
 							}
 							return dt;
 						});
-						
+
 						localCat.tasks.forEach(lt => {
 							if (!diskTasks.find(dt => dt.id === lt.id)) {
 								mergedTasks.push(lt);
 							}
 						});
-						
-						// Re-apply local sort order to mergedTasks
+
 						const localIdToIndex = new Map<string, number>();
 						localCat.tasks.forEach((t, i) => localIdToIndex.set(t.id, i));
 
@@ -246,13 +222,11 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 						});
 
 						diskCat.tasks = mergedTasks;
-						
 					} else {
 						mergedCategories.push(localCat);
 					}
 				});
-				
-				// Re-apply local category order
+
 				const localCatOrder = new Map<string, number>();
 				categories.forEach((c, i) => localCatOrder.set(c.id, i));
 
@@ -261,11 +235,11 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 					const idxB = localCatOrder.has(b.id) ? localCatOrder.get(b.id)! : 999999999;
 					return idxA - idxB;
 				});
-				
+
 				const data = { categories: mergedCategories };
 				fs.writeFileSync(this.settings.sharedFilePath, JSON.stringify(data, null, 2));
 				this.refreshViews();
-				
+
 			} catch (e) {
 				console.error("Error writing shared file:", e);
 				new Notice("Error saving to shared file.");
@@ -286,14 +260,14 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 					const content = fs.readFileSync(this.settings.sharedFilePath, 'utf8');
 					const data = JSON.parse(content);
 					const categories = data.categories || [];
-					
+
 					let changed = false;
 					categories.forEach((c: any) => {
 						const originalLength = c.tasks.length;
 						c.tasks = c.tasks.filter((t: any) => !t.completed);
 						if (c.tasks.length !== originalLength) changed = true;
 					});
-					
+
 					if (changed) {
 						const newData = { categories: categories };
 						fs.writeFileSync(this.settings.sharedFilePath, JSON.stringify(newData, null, 2));
@@ -315,7 +289,7 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 				c.tasks = c.tasks.filter(t => !t.completed);
 				if (c.tasks.length !== originalLength) changed = true;
 			});
-			
+
 			if (changed) {
 				await this.saveSettings();
 				new Notice("Completed tasks cleaned (Local).");
@@ -376,7 +350,7 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 			isCollapsed: false,
 			color: ''
 		};
-		
+
 		if (firstTaskText) {
 			newCategory.tasks.push({
 				id: Date.now().toString() + '-task',
@@ -400,10 +374,10 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 					const content = fs.readFileSync(this.settings.sharedFilePath, 'utf8');
 					const data = JSON.parse(content);
 					let categories = data.categories || [];
-					
+
 					const initialLength = categories.length;
 					categories = categories.filter((c: any) => c.id !== categoryId);
-					
+
 					if (categories.length !== initialLength) {
 						const newData = { categories: categories };
 						fs.writeFileSync(this.settings.sharedFilePath, JSON.stringify(newData, null, 2));
@@ -430,10 +404,8 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 				const newTask: Task = {
 					...taskToDuplicate,
 					id: Date.now().toString() + '-copy',
-					// We keep the same text, completion status, due date, scratchpad
 				};
-				
-				// Insert right after the original task
+
 				category.tasks.splice(taskIndex + 1, 0, newTask);
 				await this.saveCategories(categories);
 			}
@@ -444,25 +416,18 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 		const useShared = isShared !== undefined ? isShared : (this.settings.activeContext === 'shared');
 
 		if (useShared && this.settings.sharedFilePath) {
-			// Specific logic for Shared Delete to avoid "undelete" issues with generic merge
 			try {
 				const fs = require('fs');
 				if (fs.existsSync(this.settings.sharedFilePath)) {
-					// 1. Read fresh
 					const content = fs.readFileSync(this.settings.sharedFilePath, 'utf8');
 					const data = JSON.parse(content);
 					const categories = data.categories || [];
-					
-					// 2. Modify (Delete)
+
 					const category = categories.find((c: Category) => c.id === categoryId);
 					if (category) {
 						category.tasks = category.tasks.filter((t: any) => t.id !== taskId);
-						
-						// 3. Write immediately
 						const newData = { categories: categories };
 						fs.writeFileSync(this.settings.sharedFilePath, JSON.stringify(newData, null, 2));
-						
-						// 4. Refresh
 						this.refreshViews();
 					}
 				}
@@ -471,7 +436,6 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 				new Notice("Error deleting shared task.");
 			}
 		} else {
-			// Local logic
 			const categories = this.settings.categories;
 			const category = categories.find(c => c.id === categoryId);
 			if (category) {
@@ -483,7 +447,6 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 
 	async activateView() {
 		const { workspace } = this.app;
-
 		let leaf: WorkspaceLeaf | null = null;
 		const leaves = workspace.getLeavesOfType(VIEW_TYPE_TASKS);
 
@@ -493,7 +456,6 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 			leaf = workspace.getRightLeaf(false);
 			await leaf.setViewState({ type: VIEW_TYPE_TASKS, active: true });
 		}
-
 		await workspace.revealLeaf(leaf);
 	}
 }
@@ -510,7 +472,6 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 
 	display(): void {
 		const { containerEl } = this;
-
 		containerEl.empty();
 
 		new Setting(containerEl)
@@ -526,7 +487,6 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 				.setTooltip('Select existing file')
 				.onClick(async () => {
 					try {
-						// Create invisible file input
 						const input = document.createElement('input');
 						input.type = 'file';
 						input.accept = '.json';
@@ -537,27 +497,25 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 							if (input.files && input.files.length > 0) {
 								const file = input.files[0];
 								// @ts-ignore
-								const filePath = file.path; // Electron exposes path property on File object
+								const filePath = file.path;
 
 								if (filePath) {
 									this.plugin.settings.sharedFilePath = filePath;
 									await this.plugin.saveSettings();
-									this.display(); // Refresh to show new path
+									this.display();
 									new Notice(`Selected shared file: ${filePath}`);
 								}
 							}
 							document.body.removeChild(input);
 						};
 
-						// Trigger click
 						input.click();
 
-						// Cleanup if cancelled (timeout fallback)
 						setTimeout(() => {
 							if (document.body.contains(input)) {
 								document.body.removeChild(input);
 							}
-						}, 30000); // 30s timeout
+						}, 30000);
 
 					} catch (e) {
 						console.error(e);
@@ -577,9 +535,9 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 							// @ts-ignore
 							remote = electron.remote;
 						}
-						
+
 						if (!remote) throw new Error("Electron remote not available");
-						
+
 						const dialog = remote.dialog;
 						const result = await dialog.showSaveDialog({
 							filters: [{ name: 'Fichiers de tâches (JSON)', extensions: ['json'] }]
@@ -613,9 +571,9 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 			.setName('Date format')
 			.setDesc('Choose how dates are displayed.')
 			.addDropdown(dropdown => dropdown
-			.addOption('Automatic', 'Automatique (selon la langue de Obsidian)')
-			.addOption('YYYY-MM-DD', 'Année-mois-jour (ex: 2026-01-02)')
-			.addOption('DD-MM-YYYY', 'Jour-mois-année (ex: 02-01-2026)')	
+				.addOption('Automatic', 'Automatic (based on Obsidian language)')
+			.addOption('YYYY-MM-DD', 'Year-Month-Day (e.g. 2026-01-02)')
+			.addOption('DD-MM-YYYY', 'Day-Month-Year (e.g. 02-01-2026)')
 				.setValue(this.plugin.settings.dateFormat)
 				.onChange(async (value) => {
 					this.plugin.settings.dateFormat = value as SimpleTasksBlocksSettings['dateFormat'];
@@ -624,7 +582,7 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Number of future tasks to display')
-			.setDesc('Choose how many future occurrences to show for recurring tasks.')
+			.setDesc('Choose how many future tasks to show for recurring tasks.')	
 			.addDropdown(dropdown => {
 				for (let i = 1; i <= 10; i++) {
 					dropdown.addOption(i.toString(), i.toString());
@@ -665,7 +623,6 @@ class TasksView extends ItemView {
 	}
 
 	async onClose() {
-
 	}
 
 	refresh() {
@@ -673,19 +630,15 @@ class TasksView extends ItemView {
 		container.empty();
 		container.addClass('stb-container');
 
-		// Header (Sticky)
 		const header = container.createEl('div', { cls: 'stb-header' });
 		const grid = header.createEl('div', { cls: 'stb-header-grid' });
 		
-		// Left: Context Switcher
 		const leftPart = grid.createEl('div', { cls: 'stb-header-part-left' });
 		const switcher = leftPart.createEl('div', { cls: 'stb-context-switcher' });
 
-		// Button A: Local
 		const localBtn = switcher.createEl('div', { cls: 'stb-context-btn' });
 		localBtn.setAttribute('aria-label', 'Local tasks');
 		setIcon(localBtn, 'database');
-		// Text removed
 
 		if (this.plugin.settings.activeContext === 'local') {
 			localBtn.addClass('is-active');
@@ -699,12 +652,10 @@ class TasksView extends ItemView {
 			}
 		});
 
-		// Button B: Shared
 		const sharedBtn = switcher.createEl('div', { cls: 'stb-context-btn' });
 		sharedBtn.setAttribute('aria-label', 'Shared tasks');
 		const sharedIcon = sharedBtn.createEl('span', { cls: 'stb-btn-icon' });
 		setIcon(sharedIcon, 'share-2');
-		// Text removed vu
 
 		if (this.plugin.settings.activeContext === 'shared') {
 			sharedBtn.addClass('is-active');
@@ -722,15 +673,8 @@ class TasksView extends ItemView {
 			}
 		});
 
-		// Reload Button (Only visible if shared is active, or always? User said "Next to shared")
-		// Let's put it next to the switcher or inside if we want it integrated.
-		// User said "A côté de partager", implying next to the shared button.
-		// Since we have a switcher group, adding it as a 3rd button in the group makes sense visually if it's related to the context.
-		// But "Reload" only makes sense for Shared usually (to sync changes from others).
-		// However, user specifically asked for "recharger sans enregistrer" equivalent.
-		
 		const reloadBtn = switcher.createEl('div', { cls: 'stb-context-btn stb-reload-btn stb-sync-icon' });
-		reloadBtn.setAttribute('aria-label', 'Recharger');
+		reloadBtn.setAttribute('aria-label', 'Reload');
 		const reloadIcon = reloadBtn.createEl('span', { cls: 'stb-btn-icon' });
 		setIcon(reloadIcon, 'refresh-cw');
 		
@@ -739,16 +683,13 @@ class TasksView extends ItemView {
 			setTimeout(() => {
 				this.refresh();
 				reloadBtn.removeClass('is-spinning');
-			}, 800); // 800ms animation
-			// Removed explicit Notice per user request for silent feedback
+			}, 800);
 		});
 		
-		// --- ÉTIQUETTE DE SÉCURITÉ ---
-        // On crée le texte à l'intérieur de leftPart, mais APRÈS le switcher
-        leftPart.createEl('span', { 
-            text: this.plugin.settings.activeContext === 'shared' ? 'Shared Tasks' : 'Local Tasks',
-            cls: 'stb-context-label'
-        });
+		leftPart.createEl('span', { 
+			text: this.plugin.settings.activeContext === 'shared' ? 'Shared tasks' : 'Local tasks',
+			cls: 'stb-context-label'
+		});
 
 		const centerPart = grid.createEl('div', { cls: 'stb-header-part-center' });
 		const addCategoryBtn = centerPart.createEl('button', { text: '+ category', cls: 'mod-cta' });
@@ -783,10 +724,7 @@ class TasksView extends ItemView {
 			}).open();
 		});
 
-
-		// Categories List (Scrollable)
 		const categoriesContainer = container.createEl('div', { cls: 'stb-categories-list' });
-
 		const categories = this.plugin.getCategories();
 		categories.forEach((category, index) => {
 			this.renderCategory(categoriesContainer, category, index);
@@ -799,7 +737,6 @@ class TasksView extends ItemView {
 			reloadBtn.addClass('is-syncing');
 			setTimeout(() => reloadBtn.removeClass('is-syncing'), 2000);
 		}
-		// Removed Notice("Données synchronisées") for silent feedback
 	}
 
 	renderCategory(container: HTMLElement, category: Category, index: number) {
@@ -808,30 +745,24 @@ class TasksView extends ItemView {
 			catBlock.setCssProps({ 'background-color': category.color });
 		}
 
-		// Drag & Drop Attributes
 		catBlock.setAttribute('draggable', 'true');
 		catBlock.addEventListener('dragstart', (e) => {
 			this.draggedCategoryIndex = index;
 			catBlock.addClass('stb-dragging');
 			e.dataTransfer?.setData('text/plain', index.toString());
-			
-			// Drag effect
 			if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
 		});
 
 		catBlock.addEventListener('dragend', () => {
 			catBlock.removeClass('stb-dragging');
 			this.draggedCategoryIndex = null;
-			
-			// Remove all drag-over classes
 			const allBlocks = container.querySelectorAll('.stb-category-block');
 			allBlocks.forEach(b => b.removeClass('stb-drag-over'));
 		});
 
 		catBlock.addEventListener('dragover', (e) => {
-			e.preventDefault(); // Necessary to allow dropping
+			e.preventDefault();
 			if (this.draggedCategoryIndex === null || this.draggedCategoryIndex === index) return;
-			
 			catBlock.addClass('stb-drag-over');
 		});
 
@@ -842,24 +773,18 @@ class TasksView extends ItemView {
 		catBlock.addEventListener('drop', (e) => {
 			e.preventDefault();
 			catBlock.removeClass('stb-drag-over');
-			
 			if (this.draggedCategoryIndex !== null && this.draggedCategoryIndex !== index) {
 				void this.reorderCategories(this.draggedCategoryIndex, index);
 			}
 		});
 
-		// Context Menu for Color
 		catBlock.addEventListener('contextmenu', (event: MouseEvent) => {
 			event.preventDefault();
 			const menu = new Menu();
-			
 			menu.addItem((item) => {
-				item.setTitle("Change color")
-					.setIcon("palette");
+				item.setTitle("Change color").setIcon("palette");
 			});
-			
 			menu.addSeparator();
-
 			Object.keys(COLORS).forEach((colorName) => {
 				menu.addItem((item) => {
 					item.setTitle(colorName)
@@ -869,27 +794,21 @@ class TasksView extends ItemView {
 						});
 				});
 			});
-
 			menu.showAtPosition({ x: event.clientX, y: event.clientY });
 		});
 
-
-		// Category Header
 		const catHeader = catBlock.createEl('div', { cls: 'stb-category-header' });
 		
-		// Drag Handle
 		const dragHandle = catHeader.createEl('div', { cls: 'stb-drag-handle clickable-icon' });
-		setIcon(dragHandle, 'grip-vertical'); // 'grip-vertical' looks like 6 dots usually
+		setIcon(dragHandle, 'grip-vertical');
 
-		// 1. Chevron
 		const chevron = catHeader.createEl('div', { cls: 'stb-cat-chevron clickable-icon' });
 		setIcon(chevron, category.isCollapsed ? 'chevron-right' : 'chevron-down');
 		chevron.addEventListener('click', (e) => {
-			e.stopPropagation(); // prevent other clicks
+			e.stopPropagation();
 			void this.plugin.updateCategoryCollapse(category.id, !category.isCollapsed);
 		});
 
-		// 2. Title (Editable)
 		const title = catHeader.createEl('h3', { text: category.name });
 		title.addEventListener('click', (e) => {
 			e.stopPropagation();
@@ -901,15 +820,12 @@ class TasksView extends ItemView {
 			});
 		});
 	
-		// 3. Add Task Button
 		const addTaskHeaderBtn = catHeader.createEl('div', { cls: 'stb-cat-add-btn clickable-icon' });
 		setIcon(addTaskHeaderBtn, 'plus');
 		addTaskHeaderBtn.setAttribute('aria-label', 'Add task');
 
-		// Spacer
 		catHeader.createEl('div', { cls: 'stb-spacer' });
 
-		// 4. Sort Button
 		const sortBtn = catHeader.createEl('div', { cls: 'stb-cat-sort-btn clickable-icon' });
 		setIcon(sortBtn, 'arrow-up-down');
 		sortBtn.setAttribute('aria-label', 'Sort tasks by date');
@@ -918,7 +834,6 @@ class TasksView extends ItemView {
 			void this.sortCategoryTasks(category.id);
 		});
 
-		// 5. Delete Category Button
 		const deleteCatBtn = catHeader.createEl('div', { cls: 'stb-delete-cat-btn clickable-icon' });
 		setIcon(deleteCatBtn, 'trash');
 		deleteCatBtn.setAttribute('aria-label', 'Delete category');
@@ -929,63 +844,45 @@ class TasksView extends ItemView {
 			}).open();
 		});
 
-		// Tasks List (Body)
 		if (!category.isCollapsed) {
 			const tasksList = catBlock.createEl('div', { cls: 'stb-tasks-list' });
 			category.tasks.forEach(task => {
 				this.renderTask(tasksList, category, task);
 			});
 
-			// Inline Add Task Logic
 			const inlineContainer = catBlock.createEl('div', { cls: 'stb-add-task-inline' });
-			inlineContainer.hide(); // Hidden by default
+			inlineContainer.hide();
 
 			const showInput = () => {
 				inlineContainer.show();
 				inlineContainer.empty();
 				
 				const wrapper = inlineContainer.createEl('div', { cls: 'stb-inline-input-wrapper' });
-				wrapper.style.position = 'relative'; // CRITIQUE pour le positionnement absolu du calendrier
+				wrapper.style.position = 'relative';
 				
 				const input = wrapper.createEl('input', { type: 'text', placeholder: 'New task...' });
 				input.focus();
 
-				// Date Picker Icon
 				const dateBtn = wrapper.createEl('div', { cls: 'stb-inline-date-btn clickable-icon' });
 				setIcon(dateBtn, 'calendar');
 				
-				// Hidden Date Input
 				const dateInput = wrapper.createEl('input', { type: 'date', cls: 'stb-hidden-date-input' });
-				dateInput.hide(); // Ensure hidden initially
+				dateInput.hide();
 
 				dateBtn.addEventListener('click', (e) => {
 					e.stopPropagation();
-					
-					// Calculer position du bouton par rapport au wrapper
 					const btnRect = dateBtn.getBoundingClientRect();
 					const wrapperRect = wrapper.getBoundingClientRect();
-					
-					// Positionner l'input sous le bouton
 					dateInput.style.position = 'absolute';
 					dateInput.style.top = `${btnRect.bottom - wrapperRect.top + 4}px`;
 					dateInput.style.left = `${btnRect.left - wrapperRect.left}px`;
 					dateInput.style.zIndex = '1000';
-					
 					dateInput.show();
-					
-					// Ouvrir le picker natif
 					if ('showPicker' in HTMLInputElement.prototype) {
-						try {
-							(dateInput as HTMLInputElement & { showPicker(): void }).showPicker();
-						} catch {
-							dateInput.focus();
-						}
-					} else {
-						dateInput.focus();
-					}
+						try { (dateInput as HTMLInputElement & { showPicker(): void }).showPicker(); } catch { dateInput.focus(); }
+					} else { dateInput.focus(); }
 				});
 				
-				// Update icon style when date is selected
 				dateInput.addEventListener('change', () => {
 					if (dateInput.value) {
 						dateBtn.addClass('has-date');
@@ -1013,15 +910,10 @@ class TasksView extends ItemView {
 					}
 				});
 				
-				// Only blur if we are not clicking the date stuff
-				// This is tricky because blur happens before click.
-				// We can use a small timeout or check relatedTarget
 				input.addEventListener('blur', (e) => {
-					// Check if focus moved to date input or button
 					if (e.relatedTarget === dateInput || e.relatedTarget === dateBtn || wrapper.contains(e.relatedTarget as Node)) {
 						return; 
 					}
-					
 				});
 			};
 
@@ -1051,12 +943,9 @@ class TasksView extends ItemView {
 		return dateStr;
 	}
 
-renderTask(container: HTMLElement, category: Category, task: Task) {
+    renderTask(container: HTMLElement, category: Category, task: Task) {
         const taskRow = container.createEl('div', { cls: 'stb-task-row' });
 
-        // ============================================================
-        // 1. TOUT À GAUCHE : LE SCRATCHPAD (NOUVEL EMPLACEMENT)
-        // ============================================================
         const scratchpadBtn = taskRow.createEl('div', { cls: 'stb-scratchpad-btn clickable-icon' });
         setIcon(scratchpadBtn, 'sticky-note');
         if (task.scratchpad) scratchpadBtn.addClass('has-content');
@@ -1070,14 +959,12 @@ renderTask(container: HTMLElement, category: Category, task: Task) {
             }).open();
         });
 
-        // 2. ENSUITE : La Checkbox
         const checkbox = taskRow.createEl('input', { type: 'checkbox' });
         checkbox.checked = task.completed;
         checkbox.addEventListener('change', () => {
             void this.toggleTask(category.id, task.id, checkbox.checked);
         });
 
-        // 3. ENSUITE : Le Texte
         const taskText = taskRow.createEl('span', { cls: 'stb-task-text', text: task.text });
         if (task.completed) taskText.addClass('is-completed');
         taskText.addEventListener('click', (e) => {
@@ -1090,17 +977,13 @@ renderTask(container: HTMLElement, category: Category, task: Task) {
             });
         });
 
-        // 4. À DROITE : Le reste des actions (Calendrier, Date, X)
         const rightActions = taskRow.createEl('div', { cls: 'stb-task-right-actions' });
 
-        // Badge de date
         if (task.dueDate) {
-            // Recurrence Icon (Portal)
             if (task.recurrenceType && task.recurrenceType !== 'none') {
                 const recurIcon = rightActions.createEl('div', { cls: 'stb-recurrence-icon clickable-icon' });
                 setIcon(recurIcon, 'calendar-cog');
                 
-                // Style adjustments
                 recurIcon.style.color = 'var(--text-accent)';
                 recurIcon.style.marginRight = '4px';
                 recurIcon.style.display = 'inline-flex';
@@ -1109,21 +992,16 @@ renderTask(container: HTMLElement, category: Category, task: Task) {
                 recurIcon.addEventListener('click', (e) => {
                     e.stopPropagation();
                     new FutureOccurrencesModal(this.app, task, this.plugin.settings.futureTasksCount, async (updatedTask) => {
-                        // Merge updates (recurrenceExdates or full clear)
                         Object.assign(task, updatedTask);
-                        
-                        // For Shared mode: we must fetch fresh categories and update the specific task within that structure
                         const categories = this.plugin.getCategories();
                         const currentCat = categories.find(c => c.id === category.id);
                         if (currentCat) {
                             const currentTask = currentCat.tasks.find(t => t.id === task.id);
                             if (currentTask) {
-                                // Apply updates to the fresh task object
                                 Object.assign(currentTask, updatedTask);
                                 await this.plugin.saveCategories(categories);
                             }
                         } else {
-                            // Fallback for local or if category not found (should be rare)
                             await this.plugin.saveCategories(categories); 
                         }
                         this.refresh();
@@ -1134,17 +1012,14 @@ renderTask(container: HTMLElement, category: Category, task: Task) {
             const formattedDate = this.formatDate(task.dueDate);
             const dateBadge = rightActions.createEl('span', { cls: 'stb-date-badge', text: formattedDate });
             
-            // Correction Minuit : window.moment()
             const todayStr = window.moment().format('YYYY-MM-DD');
             if (task.dueDate < todayStr) dateBadge.addClass('is-overdue');
             else if (task.dueDate === todayStr) dateBadge.addClass('is-today');
         }
 
-		    // Bouton Calendrier
-        	const dateEditBtn = rightActions.createEl('div', { cls: 'stb-task-date-btn clickable-icon' });
-        	setIcon(dateEditBtn, 'calendar');
+        const dateEditBtn = rightActions.createEl('div', { cls: 'stb-task-date-btn clickable-icon' });
+        setIcon(dateEditBtn, 'calendar');
 
-        // Bouton Supprimer
         const deleteBtn = rightActions.createEl('div', { cls: 'stb-delete-task-btn clickable-icon' });
         setIcon(deleteBtn, 'x');
         deleteBtn.addEventListener('click', (e) => {
@@ -1162,21 +1037,14 @@ renderTask(container: HTMLElement, category: Category, task: Task) {
             }
         });
 
-
-        
-        // Context Menu for Duplicate
         taskRow.addEventListener('contextmenu', (event: MouseEvent) => {
             event.preventDefault();
             const menu = new Menu();
-            
             menu.addItem((item) => {
-                item.setTitle("Duplicate Task")
-                    .setIcon("copy")
-                    .onClick(() => {
-                        void this.plugin.duplicateTask(category.id, task.id);
-                    });
+                item.setTitle("Duplicate Task").setIcon("copy").onClick(() => {
+                    void this.plugin.duplicateTask(category.id, task.id);
+                });
             });
-
             menu.showAtPosition({ x: event.clientX, y: event.clientY });
         });
 
@@ -1184,8 +1052,6 @@ renderTask(container: HTMLElement, category: Category, task: Task) {
             e.stopPropagation();
             new TaskDateModal(this.app, task, async (updatedData) => {
                 Object.assign(task, updatedData);
-                
-                // Re-fetching categories to be safe and ensuring we save the updated state
                 const categories = this.plugin.getCategories();
                 const currentCat = categories.find(c => c.id === category.id);
                 if (currentCat) {
@@ -1199,15 +1065,11 @@ renderTask(container: HTMLElement, category: Category, task: Task) {
                         await this.plugin.saveCategories(categories);
                     }
                 }
-                
                 this.refresh();
             }).open();
         });
-
-        // 6. FUTURE OCCURRENCES logic removed from blocks view as requested
     }
 
-	// Fonction utilitaire pour l'édition de texte en ligne
     makeEditable(element: HTMLElement, onSave: (text: string) => Promise<void>) {
         const currentText = element.innerText;
         element.empty();
@@ -1238,7 +1100,6 @@ renderTask(container: HTMLElement, category: Category, task: Task) {
         input.addEventListener('blur', () => void save());
     }
 
-    // Tri des tâches d'une catégorie par date
     async sortCategoryTasks(categoryId: string) {
         const categories = this.plugin.getCategories();
         const category = categories.find(c => c.id === categoryId);
@@ -1256,8 +1117,6 @@ renderTask(container: HTMLElement, category: Category, task: Task) {
         });
 
         category.lastSortOrder = newOrder;
-
-        // --- CORRECTION : Sauvegarde selon le contexte ---
         const isShared = this.plugin.settings.activeContext === 'shared';
         await this.plugin.saveCategories(categories, isShared);
         
@@ -1308,34 +1167,19 @@ renderTask(container: HTMLElement, category: Category, task: Task) {
 		if (category) {
 			const task = category.tasks.find(t => t.id === taskId);
 			if (task) {
-				// Recurrence Logic
 				if (completed && task.recurrenceType && task.recurrenceType !== 'none') {
-					// Calculate next date
 					let nextDate = window.moment(task.dueDate || undefined);
-					if (!task.dueDate) nextDate = window.moment(); // Default to today if no date
-
+					if (!task.dueDate) nextDate = window.moment();
 					const value = task.recurrenceValue || 1;
 
 					switch (task.recurrenceType) {
-						case 'daily':
-							nextDate.add(1, 'days');
-							break;
-						case 'weekly':
-							nextDate.add(1, 'weeks');
-							break;
-						case 'monthly':
-							nextDate.add(1, 'months');
-							break;
-						case 'custom_days':
-							nextDate.add(value, 'days');
-							break;
+						case 'daily': nextDate.add(1, 'days'); break;
+						case 'weekly': nextDate.add(1, 'weeks'); break;
+						case 'monthly': nextDate.add(1, 'months'); break;
+						case 'custom_days': nextDate.add(value, 'days'); break;
 					}
 
-					// Update task: Check if we passed the UNTIL date
 					const nextDateStr = nextDate.format('YYYY-MM-DD');
-					
-					// EXDATE Check Loop
-					// If next date is in EXDATE, keep adding until we find a valid date or pass UNTIL
 					let loopGuard = 0;
 					while (task.recurrenceExdates && task.recurrenceExdates.includes(nextDate.format('YYYY-MM-DD')) && loopGuard < 100) {
 						switch (task.recurrenceType) {
@@ -1349,11 +1193,8 @@ renderTask(container: HTMLElement, category: Category, task: Task) {
 					
 					const finalNextDateStr = nextDate.format('YYYY-MM-DD');
 					let shouldRecur = true;
-
 					if (task.recurrenceUntil) {
-						if (nextDate.isAfter(moment(task.recurrenceUntil))) {
-							shouldRecur = false;
-						}
+						if (nextDate.isAfter(moment(task.recurrenceUntil))) shouldRecur = false;
 					}
 
 					if (shouldRecur) {
@@ -1361,18 +1202,14 @@ renderTask(container: HTMLElement, category: Category, task: Task) {
 						task.dueDate = finalNextDateStr;
 						new Notice(`Next occurrence: ${task.dueDate}`);
 					} else {
-						// Task is completed and recurrence ends
 						task.completed = true;
 						new Notice("Recurring task ended (Until date reached).");
 					}
 				} else {
-					// Standard toggle
 					task.completed = completed;
 				}
 				
 				await this.plugin.saveCategories(categories);
-				// If we changed the date or kept it uncompleted, the UI needs to reflect that state
-				// This is handled by refresh in the view calling this or automatic if triggered via view
 			}
 		}
 	}
@@ -1394,8 +1231,6 @@ renderTask(container: HTMLElement, category: Category, task: Task) {
 		});
 		await this.plugin.saveCategories(categories);
 	}
-
-
 
 	async updateCategoryColor(categoryId: string, color: string) {
 		const categories = this.plugin.getCategories();
@@ -1471,7 +1306,7 @@ class FutureOccurrencesModal extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
-		contentEl.createEl("h2", { text: "Future Occurrences" });
+		contentEl.createEl("h2", { text: "Future tasks" });
 		
 		const listContainer = contentEl.createDiv({ cls: 'stb-future-list' });
 		
@@ -1481,13 +1316,11 @@ class FutureOccurrencesModal extends Modal {
 		const value = this.task.recurrenceValue || 1;
 		const exdates = this.task.recurrenceExdates || [];
 		
-		// Generate candidates
 		let found = 0;
 		let safety = 0;
 		const maxDisplay = 15;
 		
 		while (found < maxDisplay && safety < 1000) {
-			// Calculate next date
 			switch (this.task.recurrenceType) {
 				case 'daily': nextDate.add(1, 'days'); break;
 				case 'weekly': nextDate.add(1, 'weeks'); break;
@@ -1497,12 +1330,10 @@ class FutureOccurrencesModal extends Modal {
 			
 			const dateStr = nextDate.format('YYYY-MM-DD');
 			
-			// Check Until
 			if (this.task.recurrenceUntil && nextDate.isAfter(moment(this.task.recurrenceUntil))) {
 				break;
 			}
 			
-			// Check Exdate
 			if (exdates.includes(dateStr)) {
 				safety++;
 				continue;
@@ -1511,7 +1342,6 @@ class FutureOccurrencesModal extends Modal {
 			found++;
 			safety++;
 			
-			// Render Row
 			const row = listContainer.createDiv({ cls: 'stb-future-item' });
 			row.style.display = 'flex';
 			row.style.justifyContent = 'space-between';
@@ -1521,42 +1351,38 @@ class FutureOccurrencesModal extends Modal {
 			
 			const dateText = nextDate.format('dddd LL');
 			const capitalizedDateText = dateText.charAt(0).toUpperCase() + dateText.slice(1);
-			row.createSpan({ text: capitalizedDateText }); // Localized long date with capitalized day
+			row.createSpan({ text: capitalizedDateText });
 			
 			const deleteBtn = row.createDiv({ cls: 'clickable-icon' });
 			setIcon(deleteBtn, 'trash');
-			deleteBtn.setAttribute('aria-label', 'Skip this occurrence');
+			deleteBtn.setAttribute('aria-label', 'Skip this task');
 			deleteBtn.addEventListener('click', () => {
-				new ConfirmModal(this.app, `Skip the occurrence on ${dateStr}?`, () => {
-					// Add to EXDATE
+				new ConfirmModal(this.app, `Skip the task on ${dateStr}?`, () => {
 					const newExdates = [...(this.task.recurrenceExdates || []), dateStr];
 					this.onSave({ recurrenceExdates: newExdates });
-					new Notice("Occurrence skipped.");
+					new Notice("Task skipped.");
 					this.close();
 				}).open();
 			});
 		}
 		
 		if (found === 0) {
-			listContainer.createDiv({ text: "No future occurrences found." });
+			listContainer.createDiv({ text: "No future tasks found." });
 		}
 
-		// --- Footer Logic ---
 		const footer = contentEl.createDiv({ cls: 'stb-future-footer' });
 		footer.style.marginTop = '15px';
 		footer.style.fontStyle = 'italic';
 		footer.style.color = 'var(--text-muted)';
 		footer.style.marginBottom = '20px';
 
-		// Check if there are MORE items
 		if (found === maxDisplay) {
 			if (this.task.recurrenceUntil) {
-				// CASE A: Count remaining until end date
 				let remaining = 0;
 				let countSafety = 0;
-				const countDate = nextDate.clone(); // Continue from last checked date
+				const countDate = nextDate.clone();
 
-				while (countSafety < 5000) { // Safety limit for loop
+				while (countSafety < 5000) {
 					switch (this.task.recurrenceType) {
 						case 'daily': countDate.add(1, 'days'); break;
 						case 'weekly': countDate.add(1, 'weeks'); break;
@@ -1564,35 +1390,23 @@ class FutureOccurrencesModal extends Modal {
 						case 'custom_days': countDate.add(value, 'days'); break;
 					}
 
-					if (countDate.isAfter(moment(this.task.recurrenceUntil))) {
-						break;
-					}
-
-					if (!exdates.includes(countDate.format('YYYY-MM-DD'))) {
-						remaining++;
-					}
+					if (countDate.isAfter(moment(this.task.recurrenceUntil))) break;
+					if (!exdates.includes(countDate.format('YYYY-MM-DD'))) remaining++;
 					countSafety++;
 				}
 
 				if (remaining > 0) {
-					footer.setText(`And ${remaining} more occurrences until ${this.task.recurrenceUntil}`);
+					footer.setText(`And ${remaining} more tasks until ${this.task.recurrenceUntil}`);
 				}
 
 			} else {
-				// CASE B: Infinite
 				let typeText = 'days';
 				let displayValue = 1;
 
 				switch(this.task.recurrenceType) {
-					case 'daily': 
-						typeText = 'days'; 
-						break;
-					case 'weekly': 
-						typeText = 'weeks'; 
-						break;
-					case 'monthly': 
-						typeText = 'months'; 
-						break;
+					case 'daily': typeText = 'days'; break;
+					case 'weekly': typeText = 'weeks'; break;
+					case 'monthly': typeText = 'months'; break;
 					case 'custom_days': 
 						typeText = 'days'; 
 						displayValue = value;
@@ -1603,7 +1417,6 @@ class FutureOccurrencesModal extends Modal {
 			}
 		}
 
-		// --- Stop Recurrence Button ---
 		const stopBtnContainer = contentEl.createDiv({ cls: 'stb-stop-recurrence-container' });
 		stopBtnContainer.style.display = 'flex';
 		stopBtnContainer.style.justifyContent = 'center';
@@ -1654,29 +1467,27 @@ class TaskDateModal extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
-		contentEl.createEl("h2", { text: "Éditer la date et récurrence" });
+		contentEl.createEl("h2", { text: "Edit date and recurrence" });
 
-		// Date Picker
 		new Setting(contentEl)
-			.setName("Date d'échéance")
+			.setName("Due date")
 			.addText(text => text
 				.setValue(this.tempDate)
 				.setPlaceholder('YYYY-MM-DD')
 				.onChange(value => {
 					this.tempDate = value;
 				})
-				.inputEl.type = 'date' // Native date picker
+				.inputEl.type = 'date'
 			);
 
-		// Recurrence Type
 		new Setting(contentEl)
-			.setName("Récurrence")
+			.setName("Recurrence")
 			.addDropdown(dropdown => dropdown
-				.addOption('none', 'Aucune')
-				.addOption('daily', 'Tous les jours')
-				.addOption('weekly', 'Toutes les semaines')
-				.addOption('monthly', 'Tous les mois')
-				.addOption('custom_days', 'Personnalisé (Jours)')
+				.addOption('none', 'None')
+				.addOption('daily', 'Daily')
+				.addOption('weekly', 'Weekly')
+				.addOption('monthly', 'Monthly')
+				.addOption('custom_days', 'Custom (Days)')
 				.setValue(this.tempRecurType)
 				.onChange(value => {
 					this.tempRecurType = value as any;
@@ -1684,9 +1495,8 @@ class TaskDateModal extends Modal {
 				})
 			);
 
-		// Custom Value Field (Hidden by default)
 		const valueField = new Setting(contentEl)
-			.setName("Intervalle (jours)")
+			.setName("Interval (days)")
 			.addText(text => text
 				.setValue(this.tempRecurValue.toString())
 				.onChange(value => {
@@ -1698,17 +1508,15 @@ class TaskDateModal extends Modal {
 				.inputEl.type = 'number'
 			);
 
-		// Initialize visibility for custom value
 		this.displayCustomValueField(valueField, this.tempRecurType);
 
-		// End of Recurrence
-		contentEl.createEl("h3", { text: "Fin de la récurrence", cls: "stb-modal-h3" });
+		contentEl.createEl("h3", { text: "End of recurrence", cls: "stb-modal-h3" });
 		
 		const untilSetting = new Setting(contentEl)
-			.setName("Arrêter la répétition")
+			.setName("Stop repeating")
 			.addDropdown(dropdown => dropdown
-				.addOption('never', 'Jamais')
-				.addOption('until', 'Jusqu\'au...')
+				.addOption('never', 'Never')
+				.addOption('until', 'Until...')
 				.setValue(this.tempUntilMode)
 				.onChange(value => {
 					this.tempUntilMode = value as 'never' | 'until';
@@ -1717,7 +1525,7 @@ class TaskDateModal extends Modal {
 			);
 
 		const untilDateField = new Setting(contentEl)
-			.setName("Date de fin")
+			.setName("End date")
 			.addText(text => text
 				.setValue(this.tempRecurUntil)
 				.setPlaceholder('YYYY-MM-DD')
@@ -1729,33 +1537,29 @@ class TaskDateModal extends Modal {
 		
 		this.displayUntilField(untilDateField, this.tempUntilMode);
 
-
-		// Save Button
 		const buttonDiv = contentEl.createDiv({ cls: 'stb-modal-actions' });
 		buttonDiv.style.marginTop = '20px';
 		
 		const saveBtn = new Setting(buttonDiv)
 			.addButton(btn => btn
-				.setButtonText("Enregistrer")
+				.setButtonText("Save")
 				.setCta()
 				.onClick(() => {
-					// Validation: End date requires Start date and Recurrence Type
 					if (this.tempUntilMode === 'until') {
 						if (!this.tempDate) {
-							new Notice("Erreur : Une date d'échéance (début) est requise pour définir une fin de récurrence.");
+							new Notice("Error: A due date (start) is required to set a recurrence end date.");
 							return;
 						}
 						if (this.tempRecurType === 'none') {
-							new Notice("Erreur : Veuillez choisir une fréquence de récurrence.");
+							new Notice("Error: Please choose a recurrence frequency.");
 							return;
 						}
 						if (!this.tempRecurUntil) {
-							new Notice("Erreur : Veuillez sélectionner une date de fin valide.");
+							new Notice("Error: Please select a valid end date.");
 							return;
 						}
 					}
 
-					// Clean up until date if mode is never
 					const finalUntil = this.tempUntilMode === 'until' ? this.tempRecurUntil : undefined;
 
 					this.onSave({
@@ -1768,7 +1572,6 @@ class TaskDateModal extends Modal {
 				})
 			);
 			
-		// Style hack to make button full width if desired, or just standard
 		saveBtn.settingEl.style.border = 'none';
 		saveBtn.settingEl.style.justifyContent = 'flex-end';
 	}
@@ -1816,7 +1619,6 @@ class ScratchpadModal extends Modal {
 		});
 		textarea.placeholder = "Write your notes here...";
 		
-		// Auto-focus and place cursor at end
 		textarea.focus();
 		textarea.setSelectionRange(this.initialText.length, this.initialText.length);
 
@@ -1907,9 +1709,8 @@ class SharedSetupModal extends Modal {
 				pathInput.disabled = false;
 				pathInput.focus();
 				
-				// Change browse button to "Save" for manual input
 				browseBtn.setText("Save Path");
-				browseBtn.replaceWith(browseBtn.cloneNode(true)); // Remove listeners
+				browseBtn.replaceWith(browseBtn.cloneNode(true));
 				const newSaveBtn = buttonDiv.querySelector("button.mod-cta") as HTMLButtonElement;
 				
 				newSaveBtn.addEventListener("click", async () => {
