@@ -39,7 +39,7 @@ const DEFAULT_SETTINGS: SimpleTasksBlocksSettings = {
 	dateFormat: 'Automatic',
 	sharedFilePath: '',
 	activeContext: 'local',
-	futureTasksCount: 5
+	futureTasksCount: 10
 }
 
 const VIEW_TYPE_TASKS = "simple-tasks-blocks-view";
@@ -585,7 +585,7 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 			.setName(t('SETTING_FUTURE_COUNT'))
 			.setDesc(t('SETTING_FUTURE_COUNT_DESC'))	
 			.addDropdown(dropdown => {
-				for (let i = 1; i <= 10; i++) {
+				for (let i = 1; i <= 15; i++) {
 					dropdown.addOption(i.toString(), i.toString());
 				}
 				dropdown
@@ -1304,7 +1304,7 @@ class FutureOccurrencesModal extends Modal {
 	constructor(app: App, task: Task, count: number, onSave: (updatedTask: Partial<Task>) => void) {
 		super(app);
 		this.task = task;
-		this.count = 15; // Force limit to 15 as requested
+		this.count = count;
 		this.onSave = onSave;
 	}
 
@@ -1322,7 +1322,7 @@ class FutureOccurrencesModal extends Modal {
 		
 		let found = 0;
 		let safety = 0;
-		const maxDisplay = 15;
+		const maxDisplay = this.count;
 		
 		while (found < maxDisplay && safety < 1000) {
 			switch (this.task.recurrenceType) {

@@ -36,12 +36,12 @@
         }
       ],
       "isCollapsed": false,
-      "color": ""
+      "color": "rgba(156, 39, 176, 0.1)"
     }
   ],
   "confirmTaskDeletion": true,
   "dateFormat": "Automatic",
   "sharedFilePath": "/Users/walden/Documents/hhhj.json",
-  "activeContext": "local",
-  "futureTasksCount": 10
+  "activeContext": "shared",
+  "futureTasksCount": 14
 }
