@@ -1,0 +1,54 @@
+{
+  "categories": [
+    {
+      "id": "1767990070695",
+      "name": "vzgvegv",
+      "tasks": [
+        {
+          "id": "1767990081384",
+          "text": "vfdb",
+          "completed": false,
+          "scratchpad": "",
+          "dueDate": "2026-01-14"
+        }
+      ],
+      "isCollapsed": false,
+      "color": "rgba(158, 158, 158, 0.1)",
+      "lastSortOrder": "desc"
+    },
+    {
+      "id": "1768258734805",
+      "name": "bloc",
+      "tasks": [
+        {
+          "id": "1768264525415",
+          "text": "fevzvrze",
+          "completed": false,
+          "dueDate": "2026-03-13"
+        },
+        {
+          "id": "1768264569836-copy",
+          "text": "fevzvrze",
+          "completed": false
+        },
+        {
+          "id": "1768264527886-copy",
+          "text": "fevzvrze",
+          "completed": false
+        },
+        {
+          "id": "1768264530167-copy",
+          "text": "fevzvrze",
+          "completed": false
+        }
+      ],
+      "isCollapsed": false,
+      "color": "",
+      "lastSortOrder": "asc"
+    }
+  ],
+  "confirmTaskDeletion": false,
+  "dateFormat": "Automatic",
+  "sharedFilePath": "/Users/walden/Documents/hhhj.json",
+  "activeContext": "local"
+}
