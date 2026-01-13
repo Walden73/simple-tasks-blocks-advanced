@@ -1,4 +1,5 @@
 import { App, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView, Modal, Notice, setIcon, Menu, moment } from 'obsidian';
+import { t } from './l10n';
 
 // --- Interfaces ---
 
@@ -43,7 +44,7 @@ const DEFAULT_SETTINGS: SimpleTasksBlocksSettings = {
 
 const VIEW_TYPE_TASKS = "simple-tasks-blocks-view";
 
-const COLORS = {
+const COLOR_VALUES = {
 	'Default': '',
 	'Red': 'rgba(233, 30, 99, 0.1)',
 	'Green': 'rgba(76, 175, 80, 0.1)',
@@ -160,11 +161,11 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 				}
 			} catch (e) {
 				console.error("Error reading shared file:", e);
-				new Notice("Error reading shared file.");
-			}
-			return [];
-		}
-		return this.settings.categories;
+						new Notice(t('ERR_READ_SHARED'));
+					}
+					return [];
+				}
+				return this.settings.categories;
 	}
 
 	async saveCategories(categories: Category[], isShared?: boolean) {
@@ -242,7 +243,7 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 
 			} catch (e) {
 				console.error("Error writing shared file:", e);
-				new Notice("Error saving to shared file.");
+				new Notice(t('ERR_SAVE_SHARED'));
 			}
 		} else {
 			this.settings.categories = categories;
@@ -272,14 +273,14 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 						const newData = { categories: categories };
 						fs.writeFileSync(this.settings.sharedFilePath, JSON.stringify(newData, null, 2));
 						this.refreshViews();
-						new Notice("Completed tasks cleaned (Shared).");
+						new Notice(t('NOTICE_CLEANED_SHARED'));
 					} else {
-						new Notice("No completed tasks to clean.");
+						new Notice(t('NOTICE_NO_CLEAN'));
 					}
 				}
 			} catch (e) {
 				console.error("Error cleaning shared tasks:", e);
-				new Notice("Error cleaning shared tasks.");
+				new Notice(t('ERR_CLEAN_SHARED'));
 			}
 		} else {
 			const categories = this.settings.categories;
@@ -292,9 +293,9 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 
 			if (changed) {
 				await this.saveSettings();
-				new Notice("Completed tasks cleaned (Local).");
+				new Notice(t('NOTICE_CLEANED_LOCAL'));
 			} else {
-				new Notice("No completed tasks to clean.");
+				new Notice(t('NOTICE_NO_CLEAN'));
 			}
 		}
 	}
@@ -386,7 +387,7 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 				}
 			} catch (e) {
 				console.error("Error deleting shared category:", e);
-				new Notice("Error deleting shared category.");
+				new Notice(t('ERR_DEL_SHARED_CAT'));
 			}
 		} else {
 			this.settings.categories = this.settings.categories.filter(c => c.id !== categoryId);
@@ -433,7 +434,7 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 				}
 			} catch (e) {
 				console.error("Error deleting shared task:", e);
-				new Notice("Error deleting shared task.");
+				new Notice(t('ERR_DEL_SHARED_TASK'));
 			}
 		} else {
 			const categories = this.settings.categories;
@@ -475,16 +476,16 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Specify the file path for tasks shared between all vaults.')
-			.setDesc('Select or create a JSON file for shared tasks.')
+			.setName(t('SETTING_PATH_NAME'))
+			.setDesc(t('SETTING_PATH_DESC'))
 			.addText(text => text
 				.setValue(this.plugin.settings.sharedFilePath || '')
-				.setPlaceholder('No file selected')
+				.setPlaceholder(t('SETTING_PATH_PLACEHOLDER'))
 				.setDisabled(true)
 			)
 			.addButton(btn => btn
-				.setButtonText('Browse...')
-				.setTooltip('Select existing file')
+				.setButtonText(t('BTN_BROWSE'))
+				.setTooltip(t('TIP_SELECT_FILE'))
 				.onClick(async () => {
 					try {
 						const input = document.createElement('input');
@@ -503,7 +504,7 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 									this.plugin.settings.sharedFilePath = filePath;
 									await this.plugin.saveSettings();
 									this.display();
-									new Notice(`Selected shared file: ${filePath}`);
+									new Notice(t('NOTICE_SHARED_ENABLED', filePath));
 								}
 							}
 							document.body.removeChild(input);
@@ -519,12 +520,12 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 
 					} catch (e) {
 						console.error(e);
-						new Notice("Error opening file picker.");
+						new Notice(t('ERR_FILE_PICKER'));
 					}
 				}))
 			.addButton(btn => btn
-				.setButtonText('Create New')
-				.setTooltip('Create new JSON file')
+				.setButtonText(t('BTN_CREATE_NEW'))
+				.setTooltip(t('TIP_CREATE_FILE'))
 				.onClick(async () => {
 					try {
 						let remote;
@@ -552,14 +553,14 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 						}
 					} catch (e) {
 						console.error(e);
-						new Notice("Error creating file. Try using the Setup Modal.");
+						new Notice(t('ERR_CREATE_FILE_MODAL'));
 						new SharedSetupModal(this.app, this.plugin).open();
 					}
 				}));
 
 		new Setting(containerEl)
-			.setName('Confirm task deletion')
-			.setDesc('Ask for confirmation before deleting a task.')
+			.setName(t('SETTING_CONFIRM_DEL'))
+			.setDesc(t('SETTING_CONFIRM_DEL_DESC'))
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.confirmTaskDeletion)
 				.onChange(async (value) => {
@@ -568,12 +569,12 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Date format')
-			.setDesc('Choose how dates are displayed.')
+			.setName(t('SETTING_DATE_FORMAT'))
+			.setDesc(t('SETTING_DATE_FORMAT_DESC'))
 			.addDropdown(dropdown => dropdown
-				.addOption('Automatic', 'Automatic (based on Obsidian language)')
-			.addOption('YYYY-MM-DD', 'Year-Month-Day (e.g. 2026-01-02)')
-			.addOption('DD-MM-YYYY', 'Day-Month-Year (e.g. 02-01-2026)')
+				.addOption('Automatic', t('SETTING_DATE_AUTO'))
+			.addOption('YYYY-MM-DD', t('FMT_YEAR_MONTH_DAY'))
+			.addOption('DD-MM-YYYY', t('FMT_DAY_MONTH_YEAR'))
 				.setValue(this.plugin.settings.dateFormat)
 				.onChange(async (value) => {
 					this.plugin.settings.dateFormat = value as SimpleTasksBlocksSettings['dateFormat'];
@@ -581,8 +582,8 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Number of future tasks to display')
-			.setDesc('Choose how many future tasks to show for recurring tasks.')	
+			.setName(t('SETTING_FUTURE_COUNT'))
+			.setDesc(t('SETTING_FUTURE_COUNT_DESC'))	
 			.addDropdown(dropdown => {
 				for (let i = 1; i <= 10; i++) {
 					dropdown.addOption(i.toString(), i.toString());
@@ -614,7 +615,7 @@ class TasksView extends ItemView {
 	}
 
 	getDisplayText() {
-		return "Simple tasks blocks";
+		return t('VIEW_DISPLAY_TEXT');
 	}
 
 	onOpen() {
@@ -637,7 +638,7 @@ class TasksView extends ItemView {
 		const switcher = leftPart.createEl('div', { cls: 'stb-context-switcher' });
 
 		const localBtn = switcher.createEl('div', { cls: 'stb-context-btn' });
-		localBtn.setAttribute('aria-label', 'Local tasks');
+		localBtn.setAttribute('aria-label', t('LABEL_LOCAL'));
 		setIcon(localBtn, 'database');
 
 		if (this.plugin.settings.activeContext === 'local') {
@@ -653,7 +654,7 @@ class TasksView extends ItemView {
 		});
 
 		const sharedBtn = switcher.createEl('div', { cls: 'stb-context-btn' });
-		sharedBtn.setAttribute('aria-label', 'Shared tasks');
+		sharedBtn.setAttribute('aria-label', t('LABEL_SHARED'));
 		const sharedIcon = sharedBtn.createEl('span', { cls: 'stb-btn-icon' });
 		setIcon(sharedIcon, 'share-2');
 
@@ -687,39 +688,41 @@ class TasksView extends ItemView {
 		});
 		
 		leftPart.createEl('span', { 
-			text: this.plugin.settings.activeContext === 'shared' ? 'Shared tasks' : 'Local tasks',
+			text: this.plugin.settings.activeContext === 'shared' ? t('LABEL_SHARED') : t('LABEL_LOCAL'),
 			cls: 'stb-context-label'
 		});
 
 		const centerPart = grid.createEl('div', { cls: 'stb-header-part-center' });
-		const addCategoryBtn = centerPart.createEl('button', { text: '+ category', cls: 'mod-cta' });
+		// Button moved to right part
+
+		const rightPart = grid.createEl('div', { cls: 'stb-header-part-right' });
+		
+		const addCategoryBtn = rightPart.createEl('button', { text: t('BTN_ADD_CAT'), cls: 'mod-cta' });
 		addCategoryBtn.addEventListener('click', () => {
 			new AddCategoryModal(this.app, (name, firstTask, date) => {
 				void this.plugin.addCategory(name, firstTask, date);
 			}).open();
 		});
 
-		const rightPart = grid.createEl('div', { cls: 'stb-header-part-right' });
-		
 		const sortGlobalBtn = rightPart.createEl('div', { cls: 'stb-header-icon clickable-icon' });
 		setIcon(sortGlobalBtn, 'arrow-down-a-z');
-		sortGlobalBtn.setAttribute('aria-label', 'Sort all categories (A-Z)');
+		sortGlobalBtn.setAttribute('aria-label', t('TIP_SORT_AZ'));
 		sortGlobalBtn.addEventListener('click', () => {
 			void this.sortAllCategoriesAlphabetically();
 		});
 
 		const toggleAllBtn = rightPart.createEl('div', { cls: 'stb-header-icon clickable-icon' });
 		setIcon(toggleAllBtn, 'chevrons-up-down');
-		toggleAllBtn.setAttribute('aria-label', 'Toggle collapse/expand for all categories');
+		toggleAllBtn.setAttribute('aria-label', t('TIP_TOGGLE_ALL'));
 		toggleAllBtn.addEventListener('click', () => {
 			void this.toggleAllCategories();
 		});
 
 		const cleanBtn = rightPart.createEl('div', { cls: 'stb-header-icon clickable-icon' });
 		setIcon(cleanBtn, 'eraser');
-		cleanBtn.setAttribute('aria-label', 'Clean completed tasks');
+		cleanBtn.setAttribute('aria-label', t('TIP_CLEAN_DONE'));
 		cleanBtn.addEventListener('click', () => {
-			new ConfirmModal(this.app, "Delete ALL completed tasks from ALL categories?", () => {
+			new ConfirmModal(this.app, t('CONFIRM_CLEAN_ALL'), () => {
 				void this.plugin.cleanCompletedTasks();
 			}).open();
 		});
@@ -782,15 +785,16 @@ class TasksView extends ItemView {
 			event.preventDefault();
 			const menu = new Menu();
 			menu.addItem((item) => {
-				item.setTitle("Change color").setIcon("palette");
+				item.setTitle(t('MENU_CHANGE_COLOR')).setIcon("palette");
 			});
 			menu.addSeparator();
-			Object.keys(COLORS).forEach((colorName) => {
+			Object.keys(COLOR_VALUES).forEach((colorName) => {
+				const displayColorName = t(`COLOR_${colorName.toUpperCase()}` as any);
 				menu.addItem((item) => {
-					item.setTitle(colorName)
-						.setChecked(category.color === COLORS[colorName as keyof typeof COLORS])
+					item.setTitle(displayColorName)
+						.setChecked(category.color === COLOR_VALUES[colorName as keyof typeof COLOR_VALUES])
 						.onClick(() => {
-							void this.plugin.updateCategoryColor(category.id, COLORS[colorName as keyof typeof COLORS]);
+							void this.plugin.updateCategoryColor(category.id, COLOR_VALUES[colorName as keyof typeof COLOR_VALUES]);
 						});
 				});
 			});
@@ -822,13 +826,13 @@ class TasksView extends ItemView {
 	
 		const addTaskHeaderBtn = catHeader.createEl('div', { cls: 'stb-cat-add-btn clickable-icon' });
 		setIcon(addTaskHeaderBtn, 'plus');
-		addTaskHeaderBtn.setAttribute('aria-label', 'Add task');
+		addTaskHeaderBtn.setAttribute('aria-label', t('TIP_ADD_TASK'));
 
 		catHeader.createEl('div', { cls: 'stb-spacer' });
 
 		const sortBtn = catHeader.createEl('div', { cls: 'stb-cat-sort-btn clickable-icon' });
 		setIcon(sortBtn, 'arrow-up-down');
-		sortBtn.setAttribute('aria-label', 'Sort tasks by date');
+		sortBtn.setAttribute('aria-label', t('TIP_SORT_DATE'));
 		sortBtn.addEventListener('click', (e) => {
 			e.stopPropagation();
 			void this.sortCategoryTasks(category.id);
@@ -836,10 +840,10 @@ class TasksView extends ItemView {
 
 		const deleteCatBtn = catHeader.createEl('div', { cls: 'stb-delete-cat-btn clickable-icon' });
 		setIcon(deleteCatBtn, 'trash');
-		deleteCatBtn.setAttribute('aria-label', 'Delete category');
+		deleteCatBtn.setAttribute('aria-label', t('TIP_DELETE_CAT'));
 		deleteCatBtn.addEventListener('click', (e) => {
 			e.stopPropagation();
-			new ConfirmModal(this.app, `Are you sure you want to delete category "${category.name}"?`, () => {
+			new ConfirmModal(this.app, t('CONFIRM_DELETE_CAT', category.name), () => {
 				void this.deleteCategory(category.id);
 			}).open();
 		});
@@ -860,7 +864,7 @@ class TasksView extends ItemView {
 				const wrapper = inlineContainer.createEl('div', { cls: 'stb-inline-input-wrapper' });
 				wrapper.style.position = 'relative';
 				
-				const input = wrapper.createEl('input', { type: 'text', placeholder: 'New task...' });
+				const input = wrapper.createEl('input', { type: 'text', placeholder: t('INPUT_NEW_TASK') });
 				input.focus();
 
 				const dateBtn = wrapper.createEl('div', { cls: 'stb-inline-date-btn clickable-icon' });
@@ -1025,7 +1029,7 @@ class TasksView extends ItemView {
         deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             if (this.plugin.settings.confirmTaskDeletion) {
-                new ConfirmModal(this.app, "Delete this task?", async () => {
+                new ConfirmModal(this.app, t('CONFIRM_DELETE_TASK'), async () => {
                     await this.plugin.deleteTask(category.id, task.id, this.plugin.settings.activeContext === 'shared');
                     this.refresh();
                 }).open();
@@ -1041,7 +1045,7 @@ class TasksView extends ItemView {
             event.preventDefault();
             const menu = new Menu();
             menu.addItem((item) => {
-                item.setTitle("Duplicate Task").setIcon("copy").onClick(() => {
+                item.setTitle(t('TIP_DUPLICATE')).setIcon("copy").onClick(() => {
                     void this.plugin.duplicateTask(category.id, task.id);
                 });
             });
@@ -1129,7 +1133,7 @@ class TasksView extends ItemView {
 		categories.sort((a, b) => a.name.localeCompare(b.name));
 		await this.plugin.saveCategories(categories);
 		this.refresh();
-		new Notice("All categories sorted alphabetically (A-Z)");
+		new Notice(t('NOTICE_SORTED_GLOBAL'));
 	}
 
 	async reorderCategories(fromIndex: number, toIndex: number) {
@@ -1200,10 +1204,10 @@ class TasksView extends ItemView {
 					if (shouldRecur) {
 						task.completed = false;
 						task.dueDate = finalNextDateStr;
-						new Notice(`Next occurrence: ${task.dueDate}`);
+						new Notice(t('NOTICE_NEXT_OCCURRENCE', task.dueDate));
 					} else {
 						task.completed = true;
-						new Notice("Recurring task ended (Until date reached).");
+						new Notice(t('NOTICE_RECURRENCE_ENDED'));
 					}
 				} else {
 					task.completed = completed;
@@ -1254,22 +1258,22 @@ class AddCategoryModal extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
-		contentEl.createEl("h2", { text: "Add new category" });
+		contentEl.createEl("h2", { text: t('MODAL_ADD_CAT_TITLE') });
 
 		const nameDiv = contentEl.createDiv({ cls: 'stb-modal-field' });
-		nameDiv.createEl("label", { text: "Category name" });
+		nameDiv.createEl("label", { text: t('FIELD_CAT_NAME') });
 		const nameInput = nameDiv.createEl("input", { type: "text" });
 
 		const taskDiv = contentEl.createDiv({ cls: 'stb-modal-field' });
-		taskDiv.createEl("label", { text: "First task name" });
+		taskDiv.createEl("label", { text: t('FIELD_FIRST_TASK') });
 		const taskInput = taskDiv.createEl("input", { type: "text" });
 
 		const dateDiv = contentEl.createDiv({ cls: 'stb-modal-field' });
-		dateDiv.createEl("label", { text: "Due date (optional)" });
+		dateDiv.createEl("label", { text: t('FIELD_DATE_OPTIONAL') });
 		const dateInput = dateDiv.createEl("input", { type: "date" });
 
 		const buttonDiv = contentEl.createDiv({ cls: 'stb-modal-actions' });
-		const submitBtn = buttonDiv.createEl("button", { text: "Create", cls: "mod-cta" });
+		const submitBtn = buttonDiv.createEl("button", { text: t('BTN_CREATE'), cls: "mod-cta" });
 
 		submitBtn.addEventListener("click", () => {
 			const name = nameInput.value.trim();
@@ -1277,7 +1281,7 @@ class AddCategoryModal extends Modal {
 			const date = dateInput.value;
 			
 			if (!name || !task) {
-				new Notice("Both fields are required.");
+				new Notice(t('ERR_REQUIRED'));
 				return;
 			}
 
@@ -1306,7 +1310,7 @@ class FutureOccurrencesModal extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
-		contentEl.createEl("h2", { text: "Future tasks" });
+		contentEl.createEl("h2", { text: t('MODAL_FUTURE_TITLE') });
 		
 		const listContainer = contentEl.createDiv({ cls: 'stb-future-list' });
 		
@@ -1355,19 +1359,19 @@ class FutureOccurrencesModal extends Modal {
 			
 			const deleteBtn = row.createDiv({ cls: 'clickable-icon' });
 			setIcon(deleteBtn, 'trash');
-			deleteBtn.setAttribute('aria-label', 'Skip this task');
+			deleteBtn.setAttribute('aria-label', t('TIP_SKIP_TASK'));
 			deleteBtn.addEventListener('click', () => {
-				new ConfirmModal(this.app, `Skip the task on ${dateStr}?`, () => {
+				new ConfirmModal(this.app, t('CONFIRM_SKIP_DATE', dateStr), () => {
 					const newExdates = [...(this.task.recurrenceExdates || []), dateStr];
 					this.onSave({ recurrenceExdates: newExdates });
-					new Notice("Task skipped.");
+					new Notice(t('NOTICE_SKIPPED'));
 					this.close();
 				}).open();
 			});
 		}
 		
 		if (found === 0) {
-			listContainer.createDiv({ text: "No future tasks found." });
+			listContainer.createDiv({ text: t('MSG_NO_FUTURE') });
 		}
 
 		const footer = contentEl.createDiv({ cls: 'stb-future-footer' });
@@ -1396,24 +1400,24 @@ class FutureOccurrencesModal extends Modal {
 				}
 
 				if (remaining > 0) {
-					footer.setText(`And ${remaining} more tasks until ${this.task.recurrenceUntil}`);
+					footer.setText(t('MSG_AND_MORE', remaining.toString(), this.task.recurrenceUntil));
 				}
 
 			} else {
-				let typeText = 'days';
+				let typeText = t('UNIT_DAYS');
 				let displayValue = 1;
 
 				switch(this.task.recurrenceType) {
-					case 'daily': typeText = 'days'; break;
-					case 'weekly': typeText = 'weeks'; break;
-					case 'monthly': typeText = 'months'; break;
+					case 'daily': typeText = t('UNIT_DAYS'); break;
+					case 'weekly': typeText = t('UNIT_WEEKS'); break;
+					case 'monthly': typeText = t('UNIT_MONTHS'); break;
 					case 'custom_days': 
-						typeText = 'days'; 
+						typeText = t('UNIT_DAYS'); 
 						displayValue = value;
 						break;
 				}
 				
-				footer.setText(`Task repeated every ${displayValue} ${typeText} without end date`);
+				footer.setText(t('MSG_REPEATED_EVERY', displayValue.toString(), typeText));
 			}
 		}
 
@@ -1422,18 +1426,18 @@ class FutureOccurrencesModal extends Modal {
 		stopBtnContainer.style.justifyContent = 'center';
 		stopBtnContainer.style.marginTop = '10px';
 
-		const stopBtn = stopBtnContainer.createEl('button', { text: "Stop Recurrence / Delete all future dates", cls: "mod-warning" });
+		const stopBtn = stopBtnContainer.createEl('button', { text: t('BTN_STOP_RECURRENCE'), cls: "mod-warning" });
 		stopBtn.style.width = '100%';
 
 		stopBtn.addEventListener('click', () => {
-			new ConfirmModal(this.app, "Are you sure you want to stop this recurrence? This will delete all future scheduled dates for this task.", () => {
+			new ConfirmModal(this.app, t('CONFIRM_STOP_RECURRENCE'), () => {
 				this.onSave({
 					recurrenceType: 'none',
 					recurrenceValue: undefined,
 					recurrenceUntil: undefined,
 					recurrenceExdates: []
 				});
-				new Notice("Recurrence stopped. Future dates deleted.");
+				new Notice(t('NOTICE_STOPPED'));
 				this.close();
 			}).open();
 		});
@@ -1467,10 +1471,10 @@ class TaskDateModal extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
-		contentEl.createEl("h2", { text: "Edit date and recurrence" });
+		contentEl.createEl("h2", { text: t('MODAL_EDIT_DATE_TITLE') });
 
 		new Setting(contentEl)
-			.setName("Due date")
+			.setName(t('FIELD_DUE_DATE'))
 			.addText(text => text
 				.setValue(this.tempDate)
 				.setPlaceholder('YYYY-MM-DD')
@@ -1481,13 +1485,13 @@ class TaskDateModal extends Modal {
 			);
 
 		new Setting(contentEl)
-			.setName("Recurrence")
+			.setName(t('FIELD_RECURRENCE'))
 			.addDropdown(dropdown => dropdown
-				.addOption('none', 'None')
-				.addOption('daily', 'Daily')
-				.addOption('weekly', 'Weekly')
-				.addOption('monthly', 'Monthly')
-				.addOption('custom_days', 'Custom (Days)')
+				.addOption('none', t('REC_NONE'))
+				.addOption('daily', t('REC_DAILY'))
+				.addOption('weekly', t('REC_WEEKLY'))
+				.addOption('monthly', t('REC_MONTHLY'))
+				.addOption('custom_days', t('REC_CUSTOM'))
 				.setValue(this.tempRecurType)
 				.onChange(value => {
 					this.tempRecurType = value as any;
@@ -1496,7 +1500,7 @@ class TaskDateModal extends Modal {
 			);
 
 		const valueField = new Setting(contentEl)
-			.setName("Interval (days)")
+			.setName(t('FIELD_INTERVAL'))
 			.addText(text => text
 				.setValue(this.tempRecurValue.toString())
 				.onChange(value => {
@@ -1510,13 +1514,13 @@ class TaskDateModal extends Modal {
 
 		this.displayCustomValueField(valueField, this.tempRecurType);
 
-		contentEl.createEl("h3", { text: "End of recurrence", cls: "stb-modal-h3" });
+		contentEl.createEl("h3", { text: t('FIELD_END_RECURRENCE'), cls: "stb-modal-h3" });
 		
 		const untilSetting = new Setting(contentEl)
-			.setName("Stop repeating")
+			.setName(t('FIELD_STOP_REPEATING'))
 			.addDropdown(dropdown => dropdown
-				.addOption('never', 'Never')
-				.addOption('until', 'Until...')
+				.addOption('never', t('VAL_NEVER'))
+				.addOption('until', t('VAL_UNTIL'))
 				.setValue(this.tempUntilMode)
 				.onChange(value => {
 					this.tempUntilMode = value as 'never' | 'until';
@@ -1525,7 +1529,7 @@ class TaskDateModal extends Modal {
 			);
 
 		const untilDateField = new Setting(contentEl)
-			.setName("End date")
+			.setName(t('MODAL_END_DATE'))
 			.addText(text => text
 				.setValue(this.tempRecurUntil)
 				.setPlaceholder('YYYY-MM-DD')
@@ -1542,20 +1546,20 @@ class TaskDateModal extends Modal {
 		
 		const saveBtn = new Setting(buttonDiv)
 			.addButton(btn => btn
-				.setButtonText("Save")
+				.setButtonText(t('BTN_SAVE'))
 				.setCta()
 				.onClick(() => {
 					if (this.tempUntilMode === 'until') {
 						if (!this.tempDate) {
-							new Notice("Error: A due date (start) is required to set a recurrence end date.");
+							new Notice(t('ERR_START_DATE_REQ'));
 							return;
 						}
 						if (this.tempRecurType === 'none') {
-							new Notice("Error: Please choose a recurrence frequency.");
+							new Notice(t('ERR_FREQ_REQ'));
 							return;
 						}
 						if (!this.tempRecurUntil) {
-							new Notice("Error: Please select a valid end date.");
+							new Notice(t('ERR_END_DATE_REQ'));
 							return;
 						}
 					}
@@ -1611,20 +1615,20 @@ class ScratchpadModal extends Modal {
 	onOpen() {
 		const { contentEl } = this;
 		contentEl.addClass('stb-scratchpad-modal');
-		contentEl.createEl("h3", { text: "Task scratchpad" });
+		contentEl.createEl("h3", { text: t('MODAL_SCRATCHPAD_TITLE') });
 
 		const textarea = contentEl.createEl("textarea", { 
 			cls: 'stb-scratchpad-textarea',
 			text: this.initialText 
 		});
-		textarea.placeholder = "Write your notes here...";
+		textarea.placeholder = t('FIELD_SCRATCHPAD_PLACEHOLDER');
 		
 		textarea.focus();
 		textarea.setSelectionRange(this.initialText.length, this.initialText.length);
 
 		const buttonDiv = contentEl.createDiv({ cls: 'stb-modal-actions' });
-		const saveBtn = buttonDiv.createEl("button", { text: "Save", cls: "mod-cta" });
-		const cancelBtn = buttonDiv.createEl("button", { text: "Cancel" });
+		const saveBtn = buttonDiv.createEl("button", { text: t('BTN_SAVE'), cls: "mod-cta" });
+		const cancelBtn = buttonDiv.createEl("button", { text: t('BTN_CANCEL') });
 
 		saveBtn.addEventListener("click", () => {
 			this.onSave(textarea.value);
@@ -1652,10 +1656,10 @@ class SharedSetupModal extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
-		contentEl.createEl("h2", { text: "Setup Shared Mode" });
+		contentEl.createEl("h2", { text: t('MODAL_SHARED_SETUP_TITLE') });
 
 		const pathDiv = contentEl.createDiv({ cls: 'stb-modal-field' });
-		pathDiv.createEl("label", { text: "Shared File Path" });
+		pathDiv.createEl("label", { text: t('FIELD_SHARED_PATH') });
 		
 		const pathInput = pathDiv.createEl("input", { type: "text" });
 		pathInput.value = this.plugin.settings.sharedFilePath || '';
@@ -1665,9 +1669,9 @@ class SharedSetupModal extends Modal {
 		const buttonDiv = contentEl.createDiv({ cls: 'stb-modal-actions' });
 		buttonDiv.style.marginTop = '10px';
 		
-		const browseBtn = buttonDiv.createEl("button", { text: "Browse...", cls: "mod-cta" });
-		const createBtn = buttonDiv.createEl("button", { text: "Create New File" });
-		const cancelBtn = buttonDiv.createEl("button", { text: "Cancel" });
+		const browseBtn = buttonDiv.createEl("button", { text: t('BTN_BROWSE'), cls: "mod-cta" });
+		const createBtn = buttonDiv.createEl("button", { text: t('BTN_CREATE_NEW') });
+		const cancelBtn = buttonDiv.createEl("button", { text: t('BTN_CANCEL') });
 
 		const handleFileSelection = async (filePath: string) => {
 			pathInput.value = filePath;
@@ -1675,7 +1679,7 @@ class SharedSetupModal extends Modal {
 			await this.plugin.saveSettings();
 			this.close();
 			this.plugin.refreshViews();
-			new Notice("Shared mode enabled with: " + filePath);
+			new Notice(t('NOTICE_SHARED_ENABLED', filePath));
 		};
 
 		browseBtn.addEventListener("click", async () => {
@@ -1705,11 +1709,11 @@ class SharedSetupModal extends Modal {
 
 			} catch (e) {
 				console.error(e);
-				new Notice("Native file picker not available. Falling back to manual input.");
+				new Notice(t('ERR_PICKER'));
 				pathInput.disabled = false;
 				pathInput.focus();
 				
-				browseBtn.setText("Save Path");
+				browseBtn.setText(t('BTN_SAVE_PATH'));
 				browseBtn.replaceWith(browseBtn.cloneNode(true));
 				const newSaveBtn = buttonDiv.querySelector("button.mod-cta") as HTMLButtonElement;
 				
@@ -1748,7 +1752,7 @@ class SharedSetupModal extends Modal {
 				}
 			} catch (e) {
 				console.error(e);
-				new Notice("Error creating file: " + e);
+				new Notice(t('ERR_CREATE_FILE', String(e)));
 			}
 		});
 
@@ -1778,8 +1782,8 @@ class ConfirmModal extends Modal {
 		contentEl.createEl("h3", { text: this.message });
 
 		const buttonDiv = contentEl.createDiv({ cls: 'stb-modal-actions' });
-		const confirmBtn = buttonDiv.createEl("button", { text: "Confirm", cls: "mod-warning" });
-		const cancelBtn = buttonDiv.createEl("button", { text: "Cancel" });
+		const confirmBtn = buttonDiv.createEl("button", { text: t('CONFIRM_GENERIC'), cls: "mod-warning" });
+		const cancelBtn = buttonDiv.createEl("button", { text: t('BTN_CANCEL') });
 
 		confirmBtn.addEventListener("click", () => {
 			this.onConfirm();

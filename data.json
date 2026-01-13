@@ -17,48 +17,6 @@
       "lastSortOrder": "desc"
     },
     {
-      "id": "1768258734805",
-      "name": "bloc",
-      "tasks": [
-        {
-          "id": "1768264525415",
-          "text": "fevzvrze",
-          "completed": false,
-          "dueDate": "2026-03-14",
-          "recurrenceType": "none",
-          "recurrenceValue": 1,
-          "recurrenceUntil": "2026-01-30",
-          "recurrenceExdates": []
-        },
-        {
-          "id": "1768264569836-copy",
-          "text": "fevzvrze",
-          "completed": false,
-          "dueDate": "2026-02-14",
-          "recurrenceType": "monthly",
-          "recurrenceValue": 1,
-          "recurrenceUntil": "2026-05-13"
-        },
-        {
-          "id": "1768264527886-copy",
-          "text": "fevzvrze",
-          "completed": false,
-          "dueDate": "2026-01-22",
-          "recurrenceType": "weekly",
-          "recurrenceValue": 1,
-          "recurrenceUntil": "2026-06-15"
-        },
-        {
-          "id": "1768264530167-copy",
-          "text": "fevzvrze",
-          "completed": false
-        }
-      ],
-      "isCollapsed": false,
-      "color": "rgba(33, 150, 243, 0.1)",
-      "lastSortOrder": "asc"
-    },
-    {
       "id": "1768266830103",
       "name": "Bouffe",
       "tasks": [
@@ -81,9 +39,9 @@
       "color": ""
     }
   ],
-  "confirmTaskDeletion": false,
+  "confirmTaskDeletion": true,
   "dateFormat": "Automatic",
   "sharedFilePath": "/Users/walden/Documents/hhhj.json",
-  "activeContext": "shared",
-  "futureTasksCount": 5
+  "activeContext": "local",
+  "futureTasksCount": 10
 }
