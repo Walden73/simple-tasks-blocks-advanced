@@ -7,19 +7,11 @@ The core strength of this plugin is its flexibility in how your data is stored:
 * **Local mode**: Tasks are stored within your current vault settings. Perfect for private, vault-specific organization.
 * **Shared mode (Cross-vault sync)**: Link the plugin to an external JSON file anywhere on your computer. This allows you to **synchronize the same task list across multiple Obsidian vaults** in real-time.
 
-![Local and shared modes sync](Medias/Local%20and%20shared%20modes.gif)
-
 ## Key features
 
 * **Standalone management**: Tasks are stored internally or in a shared file; they never clutter your Markdown notes.
 * **Categorized and movable blocks**: Group your tasks into clean, rounded blocks. Easily reorder them using the vertical drag handle.
-
-![Customize categories](Medias/Customize%20categories.gif)
-
 * **Optional due dates and Advanced recurrence**: Set up daily, weekly, monthly, or custom intervals with the ability to skip occurrences or set end dates.
-
-![Recurring tasks and due dates](Medias/Due%20dates%20-%20recurring%20tasks%20.gif)
-
 * **Task scratchpad**: Each task has its own dedicated note area for detailed information, accessible via a pop-up window.
 * **Smart sorting & Visual alerts**: Tasks are sorted chronologically. Overdue tasks and tasks due today are automatically highlighted.
 * **Multilingual support**: Fully localized in English, French, Italian, Spanish, and German.
@@ -35,10 +27,6 @@ The core strength of this plugin is its flexibility in how your data is stored:
 2. **Choose your mode**: Go to the settings icon in the view header to toggle between Local and Shared storage.
 3. Click **+ category** to create your first block.
 4. Add tasks and manage their dates or recurrence using the interactive icons if you need.
-
-![Quick add and modify tasks](Medias/Quick%20add%20modify%20tasks.gif)
-
-![Delete tasks](Medias/Delete%20tasks.gif)
 
 ## Installation
 
