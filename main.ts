@@ -176,7 +176,7 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 						const content = fs.readFileSync(this.settings.sharedFilePath, 'utf8');
 						const data = JSON.parse(content);
 						freshCategories = data.categories || [];
-					} catch (readError) {
+					} catch {
 						// Ignore read error
 					}
 				}
@@ -237,7 +237,7 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 				fs.writeFileSync(this.settings.sharedFilePath, JSON.stringify(data, null, 2));
 				this.refreshViews();
 
-			} catch (e) {
+			} catch {
 				new Notice(t('ERR_SAVE_SHARED'));
 			}
 		} else {
@@ -422,7 +422,7 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 						this.refreshViews();
 					}
 				}
-			} catch (e) {
+			} catch {
 				new Notice(t('ERR_DEL_SHARED_TASK'));
 			}
 		} else {
@@ -537,7 +537,7 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 							await this.plugin.saveSettings();
 							this.display();
 						}
-					} catch (e) {
+					} catch {
 						new Notice(t('ERR_CREATE_FILE_MODAL'));
 						new SharedSetupModal(this.app, this.plugin).open();
 					}
@@ -678,7 +678,7 @@ class TasksView extends ItemView {
 			cls: 'stb-context-label'
 		});
 
-		const centerPart = grid.createEl('div', { cls: 'stb-header-part-center' });
+		grid.createEl('div', { cls: 'stb-header-part-center' });
 		// Button moved to right part
 
 		const rightPart = grid.createEl('div', { cls: 'stb-header-part-right' });
@@ -1295,7 +1295,12 @@ class FutureOccurrencesModal extends Modal {
 	}
 
 	onOpen() {
+		this.display();
+	}
+
+	display() {
 		const { contentEl } = this;
+		contentEl.empty();
 		contentEl.createEl("h2", { text: t('MODAL_FUTURE_TITLE') });
 
 		const listContainer = contentEl.createDiv({ cls: 'stb-future-list' });
@@ -1349,9 +1354,10 @@ class FutureOccurrencesModal extends Modal {
 			deleteBtn.addEventListener('click', () => {
 				new ConfirmModal(this.app, t('CONFIRM_SKIP_DATE', dateStr), () => {
 					const newExdates = [...(this.task.recurrenceExdates || []), dateStr];
+					this.task.recurrenceExdates = newExdates;
 					this.onSave({ recurrenceExdates: newExdates });
 					new Notice(t('NOTICE_SKIPPED'));
-					this.close();
+					this.display();
 				}).open();
 			});
 		}
@@ -1502,7 +1508,7 @@ class TaskDateModal extends Modal {
 
 		contentEl.createEl("h3", { text: t('FIELD_END_RECURRENCE'), cls: "stb-modal-h3" });
 
-		const untilSetting = new Setting(contentEl)
+		new Setting(contentEl)
 			.setName(t('FIELD_STOP_REPEATING'))
 			.addDropdown(dropdown => dropdown
 				.addOption('never', t('VAL_NEVER'))
@@ -1693,7 +1699,7 @@ class SharedSetupModal extends Modal {
 					await handleFileSelection(result.filePaths[0]);
 				}
 
-			} catch (e) {
+			} catch {
 				new Notice(t('ERR_PICKER'));
 				pathInput.disabled = false;
 				pathInput.focus();

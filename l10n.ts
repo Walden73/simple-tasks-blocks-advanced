@@ -1,5 +1,3 @@
-import { moment } from "obsidian";
-
 const MESSAGES = {
   en: {
     COLOR_DEFAULT: "Default",
