@@ -1,4 +1,5 @@
 import { App, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView, Modal, Notice, setIcon, Menu, moment } from 'obsidian';
+import * as fs from 'fs';
 import { t } from './l10n';
 
 // --- Interfaces ---
@@ -88,7 +89,6 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 	setupSharedFileWatcher() {
 		if (this.settings.sharedFilePath) {
 			try {
-				const fs = require('fs');
 				if (fs.existsSync(this.settings.sharedFilePath)) {
 					let fsWait: NodeJS.Timeout | null = null;
 
@@ -111,7 +111,7 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 					});
 				}
 			} catch (e) {
-				console.error("Watcher error:", e);
+				// Ignore watcher error
 			}
 		}
 	}
@@ -119,7 +119,6 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 	onunload() {
 		if (this.settings.sharedFilePath) {
 			try {
-				const fs = require('fs');
 				fs.unwatchFile(this.settings.sharedFilePath);
 			} catch (e) {
 				// Ignore
@@ -153,19 +152,17 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 
 		if (useShared && this.settings.sharedFilePath) {
 			try {
-				const fs = require('fs');
 				if (fs.existsSync(this.settings.sharedFilePath)) {
 					const content = fs.readFileSync(this.settings.sharedFilePath, 'utf8');
 					const data = JSON.parse(content);
 					return data.categories || [];
 				}
 			} catch (e) {
-				console.error("Error reading shared file:", e);
-						new Notice(t('ERR_READ_SHARED'));
-					}
-					return [];
-				}
-				return this.settings.categories;
+				new Notice(t('ERR_READ_SHARED'));
+			}
+			return [];
+		}
+		return this.settings.categories;
 	}
 
 	async saveCategories(categories: Category[], isShared?: boolean) {
@@ -173,8 +170,6 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 
 		if (useShared && this.settings.sharedFilePath) {
 			try {
-				const fs = require('fs');
-
 				let freshCategories: Category[] = [];
 				if (fs.existsSync(this.settings.sharedFilePath)) {
 					try {
@@ -182,7 +177,7 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 						const data = JSON.parse(content);
 						freshCategories = data.categories || [];
 					} catch (readError) {
-						console.error("Error reading fresh data for merge:", readError);
+						// Ignore read error
 					}
 				}
 
@@ -202,7 +197,8 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 
 						const mergedTasks = diskTasks.map(dt => {
 							if (localTasksMap.has(dt.id)) {
-								return localTasksMap.get(dt.id)!;
+								const localTask = localTasksMap.get(dt.id);
+								if (localTask) return localTask;
 							}
 							return dt;
 						});
@@ -217,8 +213,8 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 						localCat.tasks.forEach((t, i) => localIdToIndex.set(t.id, i));
 
 						mergedTasks.sort((a, b) => {
-							const idxA = localIdToIndex.has(a.id) ? localIdToIndex.get(a.id)! : 999999999;
-							const idxB = localIdToIndex.has(b.id) ? localIdToIndex.get(b.id)! : 999999999;
+							const idxA = localIdToIndex.get(a.id) ?? 999999999;
+							const idxB = localIdToIndex.get(b.id) ?? 999999999;
 							return idxA - idxB;
 						});
 
@@ -232,8 +228,8 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 				categories.forEach((c, i) => localCatOrder.set(c.id, i));
 
 				mergedCategories.sort((a, b) => {
-					const idxA = localCatOrder.has(a.id) ? localCatOrder.get(a.id)! : 999999999;
-					const idxB = localCatOrder.has(b.id) ? localCatOrder.get(b.id)! : 999999999;
+					const idxA = localCatOrder.get(a.id) ?? 999999999;
+					const idxB = localCatOrder.get(b.id) ?? 999999999;
 					return idxA - idxB;
 				});
 
@@ -242,7 +238,6 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 				this.refreshViews();
 
 			} catch (e) {
-				console.error("Error writing shared file:", e);
 				new Notice(t('ERR_SAVE_SHARED'));
 			}
 		} else {
@@ -256,7 +251,6 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 
 		if (useShared && this.settings.sharedFilePath) {
 			try {
-				const fs = require('fs');
 				if (fs.existsSync(this.settings.sharedFilePath)) {
 					const content = fs.readFileSync(this.settings.sharedFilePath, 'utf8');
 					const data = JSON.parse(content);
@@ -279,7 +273,6 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 					}
 				}
 			} catch (e) {
-				console.error("Error cleaning shared tasks:", e);
 				new Notice(t('ERR_CLEAN_SHARED'));
 			}
 		} else {
@@ -370,7 +363,6 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 
 		if (useShared && this.settings.sharedFilePath) {
 			try {
-				const fs = require('fs');
 				if (fs.existsSync(this.settings.sharedFilePath)) {
 					const content = fs.readFileSync(this.settings.sharedFilePath, 'utf8');
 					const data = JSON.parse(content);
@@ -386,7 +378,6 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 					}
 				}
 			} catch (e) {
-				console.error("Error deleting shared category:", e);
 				new Notice(t('ERR_DEL_SHARED_CAT'));
 			}
 		} else {
@@ -418,7 +409,6 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 
 		if (useShared && this.settings.sharedFilePath) {
 			try {
-				const fs = require('fs');
 				if (fs.existsSync(this.settings.sharedFilePath)) {
 					const content = fs.readFileSync(this.settings.sharedFilePath, 'utf8');
 					const data = JSON.parse(content);
@@ -433,7 +423,6 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
 					}
 				}
 			} catch (e) {
-				console.error("Error deleting shared task:", e);
 				new Notice(t('ERR_DEL_SHARED_TASK'));
 			}
 		} else {
@@ -497,8 +486,7 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 						input.onchange = async () => {
 							if (input.files && input.files.length > 0) {
 								const file = input.files[0];
-								// @ts-ignore
-								const filePath = file.path;
+								const filePath = (file as any).path;
 
 								if (filePath) {
 									this.plugin.settings.sharedFilePath = filePath;
@@ -519,7 +507,6 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 						}, 30000);
 
 					} catch (e) {
-						console.error(e);
 						new Notice(t('ERR_FILE_PICKER'));
 					}
 				}))
@@ -528,13 +515,13 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 				.setTooltip(t('TIP_CREATE_FILE'))
 				.onClick(async () => {
 					try {
-						let remote;
+						let remote: any;
 						try {
-							remote = require('@electron/remote');
+							remote = await import('@electron/remote');
+							if (remote && remote.default) remote = remote.default;
 						} catch {
-							const electron = require('electron');
-							// @ts-ignore
-							remote = electron.remote;
+							const electron: any = await import('electron');
+							remote = electron.remote || (electron.default && electron.default.remote);
 						}
 
 						if (!remote) throw new Error("Electron remote not available");
@@ -545,14 +532,12 @@ class SimpleTasksBlocksSettingTab extends PluginSettingTab {
 						});
 
 						if (!result.canceled && result.filePath) {
-							const fs = require('fs');
 							fs.writeFileSync(result.filePath, JSON.stringify({ categories: [] }, null, 2));
 							this.plugin.settings.sharedFilePath = result.filePath;
 							await this.plugin.saveSettings();
 							this.display();
 						}
 					} catch (e) {
-						console.error(e);
 						new Notice(t('ERR_CREATE_FILE_MODAL'));
 						new SharedSetupModal(this.app, this.plugin).open();
 					}
@@ -624,6 +609,7 @@ class TasksView extends ItemView {
 	}
 
 	async onClose() {
+		// Cleanup when view is closed
 	}
 
 	refresh() {
@@ -1684,13 +1670,13 @@ class SharedSetupModal extends Modal {
 
 		browseBtn.addEventListener("click", async () => {
 			try {
-				let remote;
+				let remote: any;
 				try {
-					remote = require('@electron/remote');
+					remote = await import('@electron/remote');
+					if (remote && remote.default) remote = remote.default;
 				} catch {
-					const electron = require('electron');
-					// @ts-ignore
-					remote = electron.remote;
+					const electron: any = await import('electron');
+					remote = electron.remote || (electron.default && electron.default.remote);
 				}
 				
 				if (!remote) {
@@ -1708,7 +1694,6 @@ class SharedSetupModal extends Modal {
 				}
 
 			} catch (e) {
-				console.error(e);
 				new Notice(t('ERR_PICKER'));
 				pathInput.disabled = false;
 				pathInput.focus();
@@ -1727,13 +1712,13 @@ class SharedSetupModal extends Modal {
 
 		createBtn.addEventListener("click", async () => {
 			try {
-				let remote;
+				let remote: any;
 				try {
-					remote = require('@electron/remote');
+					remote = await import('@electron/remote');
+					if (remote && remote.default) remote = remote.default;
 				} catch {
-					const electron = require('electron');
-					// @ts-ignore
-					remote = electron.remote;
+					const electron: any = await import('electron');
+					remote = electron.remote || (electron.default && electron.default.remote);
 				}
 
 				if (!remote) {
@@ -1746,12 +1731,10 @@ class SharedSetupModal extends Modal {
 				});
 
 				if (!result.canceled && result.filePath) {
-					const fs = require('fs');
 					fs.writeFileSync(result.filePath, JSON.stringify({ categories: [] }, null, 2));
 					await handleFileSelection(result.filePath);
 				}
 			} catch (e) {
-				console.error(e);
 				new Notice(t('ERR_CREATE_FILE', String(e)));
 			}
 		});
