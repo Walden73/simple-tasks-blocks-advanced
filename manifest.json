@@ -1,5 +1,5 @@
-{  "id": "simple-tasks-blocks",
-  "name": "Simple Tasks Blocks",
+{  "id": "simple-tasks-blocks-advanced",
+  "name": "Simple Tasks Blocks Advanced",
   "version": "1.0.0",
   "minAppVersion": "1.0.0",
   "description": "Standalone task manager in the sidebar. Features local or shared storage for cross-vault sync, categories blocks, due dates and recurring tasks. Supports EN, FR, IT, ES, and DE.",
