@@ -241,13 +241,17 @@ export default class SimpleTasksBlocksPlugin extends Plugin {
         });
 
         const data = { categories: mergedCategories };
-        fs.writeFileSync(this.settings.sharedFilePath, JSON.stringify(data, null, 2));
-        this.refreshViews();
+				try {
+					fs.writeFileSync(this.settings.sharedFilePath, JSON.stringify(data, null, 2));
+					this.refreshViews();
+				} catch (err) {
+					throw new Error(`Failed to write file: ${err}`);
+				}
 
-      } catch {
-        new Notice(t('ERR_SAVE_SHARED'));
-      }
-    } else {
+			} catch (e) {
+				new Notice(`${t('ERR_SAVE_SHARED')}: ${String(e)}`);
+			}
+		} else {
       this.settings.categories = categories;
       await this.saveSettings();
     }
@@ -802,8 +806,12 @@ class TasksView extends ItemView {
       e.stopPropagation();
       this.makeEditable(title, async (newText) => {
         if (newText && newText !== category.name) {
-          category.name = newText;
-          await this.plugin.saveSettings();
+          const categories = this.plugin.getCategories();
+          const catToUpdate = categories.find(c => c.id === category.id);
+          if (catToUpdate) {
+            catToUpdate.name = newText;
+            await this.plugin.saveCategories(categories);
+          }
         }
       });
     });
@@ -959,8 +967,15 @@ class TasksView extends ItemView {
       e.stopPropagation();
       this.makeEditable(taskText, async (newText) => {
         if (newText && newText !== task.text) {
-          task.text = newText;
-          await this.plugin.saveSettings();
+          const categories = this.plugin.getCategories();
+          const cat = categories.find(c => c.id === category.id);
+          if (cat) {
+            const taskToUpdate = cat.tasks.find(t => t.id === task.id);
+            if (taskToUpdate) {
+              taskToUpdate.text = newText;
+              await this.plugin.saveCategories(categories);
+            }
+          }
         }
       });
     });
@@ -1077,22 +1092,34 @@ class TasksView extends ItemView {
     input.focus();
     input.addEventListener('click', (e) => e.stopPropagation());
 
-    const save = async () => {
-      const newText = input.value.trim();
-      if (!newText || newText === currentText) {
-        element.empty();
-        element.innerText = currentText;
-        return;
-      }
-      await onSave(newText);
-    };
+    let isSaving = false;
 
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') void save();
-      if (e.key === 'Escape') this.refresh();
-    });
+		const save = async () => {
+			if (isSaving) return;
+			isSaving = true;
 
-    input.addEventListener('blur', () => void save());
+			try {
+				const newText = input.value.trim();
+				if (!newText || newText === currentText) {
+					element.empty();
+					element.innerText = currentText;
+					return;
+				}
+				await onSave(newText);
+			} finally {
+				isSaving = false;
+			}
+		};
+
+		input.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				void save();
+			}
+			if (e.key === 'Escape') this.refresh();
+		});
+
+		input.addEventListener('blur', () => void save());
   }
 
   async sortCategoryTasks(categoryId: string) {
