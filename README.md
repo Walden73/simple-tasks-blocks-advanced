@@ -1,4 +1,4 @@
-**Simple tasks blocks** is a standalone task manager for Obsidian that lives in your sidebar. It offers a unique dual-storage system (local vault or shared JSON file) for seamless cross-vault synchronization, featuring intuitive category blocks, recurring tasks, and full multilingual support.
+**Simple tasks blocks advanced** is a standalone task manager for Obsidian that lives in your sidebar. It offers a unique dual-storage system (local vault or shared JSON file) for seamless cross-vault synchronization, featuring intuitive category blocks, recurring tasks, and full multilingual support.
 
 ## The power of two modes
 
